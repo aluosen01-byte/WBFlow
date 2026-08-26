@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WBFlow · WB一键搬品</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-logo">WB</span>
+        <div>
+          <div class="brand-name">WBFlow 一键搬品</div>
+          <div class="brand-sub">Wildberries 中国站 · 商品自动上架工具</div>
+        </div>
+      </div>
+      <div id="statusPill" class="status-pill">检测令牌中…</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 步骤1：源商品 -->
+    <section class="card" id="stepSource">
+      <div class="card-head">
+        <span class="step-no">1</span>
+        <h2>源商品</h2>
+        <span class="hint">粘贴商品链接自动解析，或手动输入商品信息</span>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="url">链接解析</button>
+        <button class="tab" data-tab="manual">手动输入</button>
+      </div>
+
+      <div class="tab-pane" id="pane-url">
+        <div class="row">
+          <input id="sourceUrl" class="input grow" type="text" placeholder="https://… 商品详情页链接（支持任意电商页的OG/JSON-LD，WB商品页尽力解析）" />
+          <button id="btnParse" class="btn primary">解析商品</button>
+        </div>
+        <div id="parseStatus" class="inline-status"></div>
+      </div>
+
+      <div class="tab-pane hidden" id="pane-manual">
+        <div class="grid2">
+          <label>商品标题 *<input id="mTitle" class="input" type="text" placeholder="最多60字符" /></label>
+          <label>品牌 *<input id="mBrand" class="input" type="text" placeholder="需为账号已注册品牌" /></label>
+          <label>价格（元）<input id="mPrice" class="input" type="number" min="0" placeholder="如 199" /></label>
+          <label>图片链接（每行一个）<textarea id="mImages" class="input" rows="3" placeholder="https://…"></textarea></label>
+          <label class="span2">商品描述<textarea id="mDesc" class="input" rows="4" placeholder="商品描述"></textarea></label>
+        </div>
+      </div>
+
+      <!-- 解析结果预览 -->
+      <div id="productPreview" class="preview hidden">
+        <div class="preview-imgs" id="previewImgs"></div>
+        <div class="preview-info">
+          <div class="preview-title" id="pvTitle"></div>
+          <div class="preview-meta">
+            <span id="pvBrand"></span><span id="pvPrice"></span><span id="pvSku"></span>
+          </div>
+          <div class="preview-desc" id="pvDesc"></div>
+          <div class="preview-attrs" id="pvAttrs"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 步骤2：WB目标配置 -->
+    <section class="card" id="stepTarget">
+      <div class="card-head">
+        <span class="step-no">2</span>
+        <h2>WB目标配置</h2>
+        <span class="hint">选择类目、填写特性、品牌与商家SKU</span>
+      </div>
+
+      <div class="grid2">
+        <label>父级类目
+          <select id="parentSelect" class="input"><option value="">加载中…</option></select>
+        </label>
+        <label>子类目（Subject）*
+          <select id="subjectSelect" class="input" disabled><option value="">请先选择父级类目</option></select>
+        </label>
+        <label>品牌 *
+          <input id="brandInput" class="input" type="text" list="brandList" placeholder="输入或选择品牌" />
+          <datalist id="brandList"></datalist>
+        </label>
+        <label>商家SKU（vendorCode）
+          <input id="vendorCodeInput" class="input" type="text" placeholder="留空自动生成，如 wb-xxxx" />
+        </label>
+      </div>
+
+      <div id="subjectInfo" class="subject-info hidden"></div>
+
+      <div class="chars-head">
+        <h3>商品特性</h3>
+        <span class="hint">* 为必填；重量/尺寸类特性将自动映射到包装尺寸</span>
+      </div>
+      <div id="charsBox" class="chars-box">
+        <div class="empty">请先选择子类目</div>
+      </div>
+    </section>
+
+    <!-- 步骤3：定价与库存 -->
+    <section class="card" id="stepPrice">
+      <div class="card-head">
+        <span class="step-no">3</span>
+        <h2>定价与库存</h2>
+        <span class="hint">新卡片在价格服务同步需数分钟，工具会自动等待</span>
+      </div>
+      <div class="grid3">
+        <label>售价（元）*<input id="priceInput" class="input" type="number" min="0" placeholder="如 199" /></label>
+        <label>折扣（%）<input id="discountInput" class="input" type="number" min="0" max="99" placeholder="0" value="0" /></label>
+        <label>仓库
+          <select id="warehouseSelect" class="input"><option value="">加载中…</option></select>
+        </label>
+        <label>库存数量<input id="stockInput" class="input" type="number" min="0" placeholder="如 100" /></label>
+        <label class="span2">
+          <span class="checkbox-label"><input type="checkbox" id="useSourceImages" checked /> 使用源商品图片（最多15张）</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- 步骤4：执行 -->
+    <section class="card" id="stepRun">
+      <div class="card-head">
+        <span class="step-no">4</span>
+        <h2>一键搬品</h2>
+      </div>
+      <button id="btnMigrate" class="btn primary big">🚀 一键搬品</button>
+      <div id="migrateStatus" class="inline-status"></div>
+
+      <div id="taskPanel" class="task-panel hidden">
+        <div class="task-progress" id="taskSteps"></div>
+        <div id="taskResult" class="task-result hidden"></div>
+        <div id="taskError" class="task-error hidden"></div>
+      </div>
+    </section>
+
+    <!-- 历史任务 -->
+    <section class="card" id="stepHistory">
+      <div class="card-head">
+        <span class="step-no">⌘</span>
+        <h2>搬品历史</h2>
+        <button id="btnRefreshTasks" class="btn ghost small">刷新</button>
+      </div>
+      <div id="tasksList" class="tasks-list">
+        <div class="empty">暂无搬品记录</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
