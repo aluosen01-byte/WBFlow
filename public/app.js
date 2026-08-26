@@ -270,7 +270,6 @@ async function runMigrate() {
       images: $('mImages').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
     };
     if (!product.title) { setStatus('migrateStatus', '手动模式请填写商品标题', 'err'); btn.disabled = false; return; }
-    if (!product.brand) { setStatus('migrateStatus', '手动模式请填写品牌', 'err'); btn.disabled = false; return; }
   }
 
   const body = {

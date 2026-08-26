@@ -56,13 +56,15 @@ const dom = new JSDOM(pageHtml, {
 });
 const { window } = dom;
 
-// ---- 存根 chrome.runtime：配置含记忆类目 lastSubjectId=2187 ----
+// ---- 存根 chrome.runtime：配置含源类目学习映射 categoryMap（源类目"Аксессуары"→2187） ----
 window.chrome = {
   runtime: {
     sendMessage: (msg, cb) => {
       const res = msg.type === 'getConfig' ? {
         backendUrl: 'http://localhost:3000', priceMode: 'manual', priceMultiplier: 1.5,
-        stock: 5, warehouseId: '', defaultBrand: '', lastParentId: '479', lastSubjectId: '2187',
+        stock: 5, warehouseId: '', defaultBrand: '',
+        lastParentId: '479', lastSubjectId: '2187',
+        categoryMap: { 'Аксессуары': { parentId: '479', subjectId: '2187' } },
       } : { ok: true };
       if (cb) cb(res);
     },
@@ -147,27 +149,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const unique = new Set(imgList).size === imgList.length;
   assert(unique, '图片去重（不同尺寸段合并）');
 
-  console.log('== 4. 源类目包屑 ==');
+  console.log('== 4. 源类目包屑与自动匹配 ==');
   const crumbsText = window.document.querySelector('.wbflow-modal-body').textContent;
   assert(crumbsText.includes('Электроника') && crumbsText.includes('Аксессуары'), '源商品类目包屑已展示');
+  assert(crumbsText.includes('自动匹配'), '类目标题提示"已按源类目自动匹配"');
 
   console.log('== 5. 仓库默认"我的仓库" ==');
   const warehouseSel = window.document.getElementById('wf-warehouse');
   const picked = warehouseSel.options[warehouseSel.selectedIndex];
   assert(picked && picked.value === '2096595', '仓库自动选中"我的仓库"(2096595): ' + (picked ? picked.text : '无'));
 
-  console.log('== 6. 类目记忆自动选中 ==');
+  console.log('== 6. 类目与搬品保持一致（源类目映射自动选中） ==');
   await sleep(700); // 等待 autoSelectSubject 的异步级联
   const parentSel = window.document.getElementById('wf-parent');
   const subjectSel = window.document.getElementById('wf-subject');
   assert(String(parentSel.value) === '479', '父级类目自动选中 479: ' + parentSel.value);
-  assert(String(subjectSel.value) === '2187', '子类目自动选中 2187: ' + subjectSel.value);
+  assert(String(subjectSel.value) === '2187', '子类目自动选中 2187（源类目"Аксессуары"映射）: ' + subjectSel.value);
   const charItems = window.document.querySelectorAll('.wbflow-char');
   assert(charItems.length === 3, '特性表单已自动加载: ' + charItems.length);
   const weightItem = [...charItems].find((i) => i.textContent.includes('带包装重量'));
   assert(weightItem && !weightItem.querySelector('input'), '重量特性自动映射（无输入框）');
 
-  console.log('== 7. 提交搬品 ==');
+  console.log('== 7. 品牌非必填 ==');
+  const brandInput = window.document.getElementById('wf-brand');
+  assert(brandInput && !brandInput.closest('label').textContent.includes('*'), '品牌标签无必填星号');
+  brandInput.value = ''; // 清空品牌
+
+  console.log('== 8. 提交搬品 ==');
   let capturedBody = null;
   const origFetch = window.fetch;
   window.fetch = async (url, opts = {}) => {
@@ -179,13 +187,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   goBtn.click();
   await sleep(2600);
   const result = window.document.querySelector('.wbflow-result');
-  assert(result, '任务结果已渲染');
+  assert(result, '品牌为空仍成功提交并渲染结果');
   assert(result.textContent.includes('1455302318'), '结果包含 nmID');
 
-  console.log('== 8. 搬品请求体完整携带 ==');
+  console.log('== 9. 搬品请求体完整携带 ==');
   assert(capturedBody, '已捕获 /api/migrate 请求体');
   assert(capturedBody.mode === 'manual', 'mode=manual');
   assert(Number(capturedBody.subjectID) === 2187, '携带子类目 subjectID=2187');
+  assert(!capturedBody.product.brand && !capturedBody.card.brand, '品牌为空且不强制');
   assert(capturedBody.product.images.length === 3, '携带全部主图(3张): ' + capturedBody.product.images.length);
   assert(capturedBody.product.images.every((u) => u.includes('/images/big/')), '主图均为 big 全尺寸');
   assert(Number(capturedBody.price) === 1299, '携带售价 1299');

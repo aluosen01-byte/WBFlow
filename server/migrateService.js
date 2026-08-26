@@ -138,12 +138,13 @@ async function downloadImages(urls, task, stepName) {
 function buildCardPayload({ subjectID, card, characteristics, sizes }) {
   const variant = {
     vendorCode: card.vendorCode,
-    brand: card.brand,
     title: String(card.title || '').slice(0, 60),
     description: String(card.description || '').slice(0, 5000),
     kizMarked: false,
     characteristics: [],
   };
+  // 品牌非必填：有值才传（实测 WB 允许空品牌建卡）
+  if (card.brand) variant.brand = String(card.brand).slice(0, 100);
 
   // 重量/尺寸类特性必须通过 dimensions 传递（单位 kg/cm），不能放在 characteristics 里
   const autoDims = {};
@@ -346,7 +347,8 @@ export async function runMigration(input) {
       description: input.card?.description || product.description || '',
       dimensions: input.card?.dimensions,
     };
-    if (!card.brand) throw new Error('缺少品牌（brand），请补充');
+    // 品牌非必填（实测 WB 允许空品牌建卡）；缺标题则报错
+    if (!card.title) throw new Error('缺少商品标题（title）');
     // 仅当用户明确提供尺寸时才传 sizes（无尺寸类目不能传）
     const sizes = input.sizes && input.sizes.length ? input.sizes : [];
 

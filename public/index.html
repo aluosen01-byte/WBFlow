@@ -45,7 +45,7 @@
       <div class="tab-pane hidden" id="pane-manual">
         <div class="grid2">
           <label>商品标题 *<input id="mTitle" class="input" type="text" placeholder="最多60字符" /></label>
-          <label>品牌 *<input id="mBrand" class="input" type="text" placeholder="需为账号已注册品牌" /></label>
+          <label>品牌（可选）<input id="mBrand" class="input" type="text" placeholder="留空则不填品牌" /></label>
           <label>价格（元）<input id="mPrice" class="input" type="number" min="0" placeholder="如 199" /></label>
           <label>图片链接（每行一个）<textarea id="mImages" class="input" rows="3" placeholder="https://…"></textarea></label>
           <label class="span2">商品描述<textarea id="mDesc" class="input" rows="4" placeholder="商品描述"></textarea></label>
@@ -81,8 +81,8 @@
         <label>子类目（Subject）*
           <select id="subjectSelect" class="input" disabled><option value="">请先选择父级类目</option></select>
         </label>
-        <label>品牌 *
-          <input id="brandInput" class="input" type="text" list="brandList" placeholder="输入或选择品牌" />
+        <label>品牌（可选）
+          <input id="brandInput" class="input" type="text" list="brandList" placeholder="输入或选择品牌，留空不填" />
           <datalist id="brandList"></datalist>
         </label>
         <label>商家SKU（vendorCode）

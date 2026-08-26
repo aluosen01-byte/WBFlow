@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "WBFlow 一键搬品",
+  "version": "1.0.0",
+  "description": "在WB商品页上注入「一键搬品」按钮，一键把商品搬到自己的WB商品列表（通过本地 WBFlow 服务）",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3001/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WBFlow 一键搬品设置",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.wildberries.ru/*",
+        "https://wildberries.ru/*",
+        "https://www.wildberries.cn/*",
+        "https://wildberries.cn/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -24,13 +24,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg?.type === 'setConfig') {
-    // 合并保存：lastParentId/lastSubjectId/categoryMap 等运行时记忆字段需保留
+    // 合并保存，避免覆盖 lastParentId/lastSubjectId 等运行时记忆字段
     chrome.storage.local.get('wbflow').then(({ wbflow }) => {
-      const base = { ...DEFAULTS, ...(wbflow || {}) };
-      const merged = { ...base, ...msg.config };
-      if (msg.config.categoryMap && base.categoryMap) {
-        merged.categoryMap = { ...base.categoryMap, ...msg.config.categoryMap };
-      }
+      const merged = { ...DEFAULTS, ...(wbflow || {}), ...msg.config };
       chrome.storage.local.set({ wbflow: merged }).then(() => sendResponse({ ok: true }));
     });
     return true;
