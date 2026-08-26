@@ -3,3 +3,7 @@ node_modules/
 *.log
 data/
 .DS_Store
+.idea/
+# dist 下解压出来的扩展副本目录（zip 是唯一交付物）
+dist/wbflow-extension-v1.0.0/
+dist/wbflow-project-v1.0.0/
