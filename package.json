@@ -14,5 +14,8 @@
   "dependencies": {
     "express": "^4.19.2"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
 }

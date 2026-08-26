@@ -8,6 +8,15 @@ ensureDirs();
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
+// CORS：允许浏览器扩展（WB商品页上下文）跨域调用本地 API
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // 静态前台
 app.use(express.static(path.join(config.root, 'public')));
 

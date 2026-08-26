@@ -27,6 +27,25 @@ npm start
 # 打开 http://localhost:3000
 ```
 
+## 🚀 浏览器扩展：WB商品页「一键搬品」按钮
+
+在 **www.wildberries.ru / wildberries.cn 的商品详情页**（如 `https://www.wildberries.ru/catalog/1455302318/detail.aspx`）右下角自动注入「🚀 一键搬品」按钮，点击后在页内弹窗完成整条搬品链路：
+
+1. **自动提取商品**：分层提取器（JSON-LD Product → OG/meta → DOM → __NUXT__ 正则兜底）抓取标题/品牌/价格/图片/描述/附加属性，全部可编辑
+2. **选择类目与特性**：父类目→子类目级联，特性表单自动加载，公共特性（颜色/材质/性别/产地等）按源属性自动预填；重量/尺寸类特性自动映射为包装重量(kg)
+3. **定价库存**：支持价格策略（源价格 / 手动 / 倍率），仓库、库存一键配置
+4. **执行搬品**：实时显示六步进度，成功后给出 nmID 与卖家后台链接
+
+### 安装扩展
+
+1. 打开 Chrome / Edge，进入 `chrome://extensions`
+2. 开启右上角「开发者模式」
+3. 点击「加载已解压的扩展程序」，选择本项目的 `wbflow-extension/` 目录
+4. 点击扩展图标打开设置弹窗，确认后端地址 `http://localhost:3000`（需已运行 `npm start`）
+5. 打开任意 WB 商品页，点右下角「🚀 一键搬品」
+
+> 扩展源码位于 `wbflow-extension/`（Manifest V3，无第三方依赖）。集成测试见 `docs_ref/test-extension.mjs`（jsdom 模拟 WB 页面，验证提取/映射/提交/结果全流程）。
+
 ## 界面流程
 
 1. **源商品**：粘贴商品链接 → 点「解析商品」查看解析结果（标题/图片/价格/品牌）；或切到「手动输入」直接填
@@ -48,7 +67,14 @@ WBFlow/
 │   ├── migrateService.js   # 一键搬品编排（六步流水线、错误翻译、同步等待）
 │   └── routes.js           # REST 路由
 ├── public/                 # 前台（原生JS单页，无构建步骤）
-└── docs_ref/               # 离线接口文档与提取/分析脚本（开发参考）
+├── wbflow-extension/       # Chrome/Edge 扩展（WB商品页注入"一键搬品"按钮）
+│   ├── manifest.json       #   MV3 清单（匹配 wildberries.ru/.cn 商品页）
+│   ├── content.js          #   页内按钮 + 分层商品提取 + 搬品弹窗
+│   ├── content.css         #   注入样式
+│   ├── background.js       #   配置存取
+│   ├── popup.html/js       #   设置弹窗（后端地址/价格策略/仓库）
+│   └── icons/
+└── docs_ref/               # 离线接口文档与提取/分析/测试脚本（开发参考）
 ```
 
 ## 接口网关（dev.wildberries.cn 实测确认）
@@ -80,6 +106,7 @@ WBFlow/
 
 ## 源商品解析限制
 
+- **浏览器扩展模式**（推荐）：在 WB 商品页内直接提取页面数据，不受服务器反爬限制
 - WB前台（wildberries.cn / wildberries.ru）对服务器请求有反爬，URL解析为尽力而为；失败时请用**手动输入**
 - 淘宝/天猫/京东/1688/拼多多等国内平台反爬严格，建议手动输入
 - Shopify、IKEA 及多数国际电商页支持 JSON-LD/OG 自动解析

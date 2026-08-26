@@ -210,10 +210,10 @@ function autoMapChars(product) {
     const name = item.querySelector('.char-name').textContent.toLowerCase();
     const inp = item.querySelector('.char-input');
     if (inp.value) return;
-    for (const [key, names] of Object.entries(aliases)) {
-      if (names.some((n) => name.includes(n.toLowerCase())) && attrs[key]?.length) {
-        inp.value = attrs[key].join(', ');
-        break;
+    for (const [, names] of Object.entries(aliases)) {
+      if (names.some((n) => name.includes(n.toLowerCase()))) {
+        const foundKey = names.find((n) => attrs[n.toLowerCase()]?.length);
+        if (foundKey) { inp.value = attrs[foundKey.toLowerCase()].join(', '); break; }
       }
     }
   });
