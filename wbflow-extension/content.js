@@ -6,9 +6,10 @@
   window.__WBF_LOADED__ = true;
 
   const NM_MATCH = window.location.pathname.match(/\/catalog\/(\d+)\/detail\.aspx/i);
-  const NM_ID = NM_MATCH ? NM_MATCH[1] : null;
+  if (!NM_MATCH) return; // 非商品详情页不注入
+  const NM_ID = NM_MATCH[1];
 
-  const ICONS = { done: '✓', err: '✕', skip: '–', run: '…' };
+  const ICONS = { done: '√', err: '×', skip: '-', run: '…' };
 
   /* ============ 配置 ============ */
   async function getConfig() {
@@ -178,7 +179,7 @@
         el('span', { class: 'wf-logo', text: 'WB' }),
         el('span', { text: '一键搬品 · nmID ' + (NM_ID || '') }),
       ]),
-      el('button', { class: 'wbflow-close', text: '✕', onclick: closeModal }),
+      el('button', { class: 'wbflow-close', text: '×', onclick: closeModal }),
     ]));
 
     const body = el('div', { class: 'wbflow-modal-body' });
@@ -273,7 +274,7 @@
 
     /* --- 底部 --- */
     const status = el('div', { class: 'wbflow-status', id: 'wf-status', text: '' });
-    const btn = el('button', { class: 'wbflow-btn primary big', id: 'wf-go', text: '🚀 一键搬品', onclick: runMigrate });
+    const btn = el('button', { class: 'wbflow-btn primary big', id: 'wf-go', text: '一键搬品', onclick: runMigrate });
     foot.appendChild(status);
     foot.appendChild(el('button', { class: 'wbflow-btn', text: '取消', onclick: closeModal }));
     foot.appendChild(btn);
@@ -467,7 +468,7 @@
           if (task.status === 'success' && task.result?.nmID) {
             const link = document.createElement('div');
             link.className = 'wbflow-result';
-            link.innerHTML = `🎉 搬品成功！<br/>nmID：<b>${task.result.nmID}</b> · SKU：<b>${esc(task.result.vendorCode)}</b><br/><a href="${esc(task.result.cardUrl)}" target="_blank" rel="noopener">打开卖家后台查看 →</a>`;
+            link.innerHTML = `搬品成功！<br/>nmID：<b>${task.result.nmID}</b> · SKU：<b>${esc(task.result.vendorCode)}</b><br/><a href="${esc(task.result.cardUrl)}" target="_blank" rel="noopener">打开卖家后台查看</a>`;
             result.after(link);
             setStatus('搬品成功！', 'ok');
           } else if (task.status === 'failed') {
@@ -499,7 +500,7 @@
 
   /* ============ 悬浮按钮 ============ */
   function injectFab() {
-    const fab = el('button', { class: 'wbflow-fab', text: '🚀 一键搬品', onclick: openModal });
+    const fab = el('button', { class: 'wbflow-fab', text: '一键搬品', onclick: openModal });
     document.body.appendChild(fab);
   }
 

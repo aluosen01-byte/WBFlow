@@ -25,10 +25,10 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.wildberries.ru/catalog/*/detail.aspx*",
-        "https://www.wildberries.cn/catalog/*/detail.aspx*",
-        "https://wildberries.ru/catalog/*/detail.aspx*",
-        "https://wildberries.cn/catalog/*/detail.aspx*"
+        "https://www.wildberries.ru/*",
+        "https://wildberries.ru/*",
+        "https://www.wildberries.cn/*",
+        "https://wildberries.cn/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

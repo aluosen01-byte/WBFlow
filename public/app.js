@@ -12,7 +12,7 @@ const state = {
   pollTimer: null,
 };
 
-const ICONS = { done: '✓', err: '✕', skip: '–', run: '…' };
+const ICONS = { done: '√', err: '×', skip: '-', run: '…' };
 
 /* ---------------- 通用 ---------------- */
 async function api(path, opts = {}) {
@@ -43,15 +43,15 @@ async function init() {
     state.status = s;
     const pill = $('statusPill');
     if (s.ok) {
-      pill.textContent = `✅ 令牌有效 · 免费额度 ${s.limits?.freeLimits ?? '?'} · ${s.warehouses?.length ?? 0} 个仓库`;
+      pill.textContent = `令牌有效 · 免费额度 ${s.limits?.freeLimits ?? '?'} · ${s.warehouses?.length ?? 0} 个仓库`;
       pill.className = 'status-pill ok';
     } else {
-      pill.textContent = '❌ 令牌无效：' + (s.tokenError || '');
+      pill.textContent = '令牌无效：' + (s.tokenError || '');
       pill.className = 'status-pill bad';
     }
     await Promise.all([loadParents(), loadWarehouses()]);
   } catch (e) {
-    $('statusPill').textContent = '❌ ' + e.message;
+    $('statusPill').textContent = e.message;
     $('statusPill').className = 'status-pill bad';
   }
   loadTasks();
@@ -318,9 +318,9 @@ function pollTask(taskId) {
         state.pollTimer = null;
         $('btnMigrate').disabled = false;
         if (task.status === 'success') {
-          setStatus('migrateStatus', '✅ 搬品成功！', 'ok');
+          setStatus('migrateStatus', '搬品成功', 'ok');
         } else {
-          setStatus('migrateStatus', '❌ 搬品失败', 'err');
+          setStatus('migrateStatus', '搬品失败', 'err');
         }
         loadTasks();
       }
@@ -343,7 +343,7 @@ function renderTask(task) {
 
   const res = task.result;
   if (res?.nmID) {
-    $('taskResult').innerHTML = `🎉 商品卡片已创建：<br/>
+    $('taskResult').innerHTML = `商品卡片已创建：<br/>
       编号 nmID：<b>${res.nmID}</b> · 商家SKU：<b>${esc(res.vendorCode)}</b><br/>
       <a href="${esc(res.cardUrl)}" target="_blank" rel="noopener">打开卖家后台查看卡片 →</a>`;
     $('taskResult').classList.remove('hidden');

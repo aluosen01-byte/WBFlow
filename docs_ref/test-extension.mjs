@@ -89,7 +89,7 @@ window.fetch = async (url, opts = {}) => {
 // ---- 执行 content.js ----
 window.eval(contentSrc);
 
-const assert = (cond, msg) => { if (!cond) throw new Error('断言失败: ' + msg); console.log('  ✓', msg); };
+const assert = (cond, msg) => { if (!cond) throw new Error('断言失败: ' + msg); console.log('  [通过]', msg); };
 
 (async () => {
   console.log('== 1. 悬浮按钮注入 ==');
@@ -140,6 +140,6 @@ const assert = (cond, msg) => { if (!cond) throw new Error('断言失败: ' + ms
   const status = window.document.getElementById('wf-status');
   assert(status.textContent.includes('成功'), '状态显示成功');
 
-  console.log('\n✅ 扩展 content.js 集成测试全部通过');
+  console.log('\n[全部通过] 扩展 content.js 集成测试');
   process.exit(0);
-})().catch((e) => { console.error('❌', e.message); process.exit(1); });
+})().catch((e) => { console.error('[失败]', e.message); process.exit(1); });
