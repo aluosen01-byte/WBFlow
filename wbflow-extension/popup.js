@@ -63,7 +63,8 @@ function read() {
 
 $('btnSave').addEventListener('click', async () => {
   const cfg = read();
-  await chrome.storage.local.set({ wbflow: cfg });
+  const existing = (await chrome.storage.local.get('wbflow')).wbflow || {};
+  await chrome.storage.local.set({ wbflow: { ...existing, ...cfg } }); // 合并，保留类目记忆等字段
   setStatus('设置已保存', 'ok');
   setTimeout(() => window.close(), 600);
 });

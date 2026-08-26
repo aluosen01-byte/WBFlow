@@ -24,7 +24,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
   if (msg?.type === 'setConfig') {
-    chrome.storage.local.set({ wbflow: msg.config }).then(() => sendResponse({ ok: true }));
+    // 合并保存，避免覆盖 lastParentId/lastSubjectId 等运行时记忆字段
+    chrome.storage.local.get('wbflow').then(({ wbflow }) => {
+      const merged = { ...DEFAULTS, ...(wbflow || {}), ...msg.config };
+      chrome.storage.local.set({ wbflow: merged }).then(() => sendResponse({ ok: true }));
+    });
     return true;
   }
   if (msg?.type === 'openTab') {

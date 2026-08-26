@@ -23,7 +23,7 @@ import { WbApiError } from './wbClient.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
 const IMAGE_CONCURRENCY = 3;
-const MAX_IMAGES = 15;
+const MAX_IMAGES = 30; // 搬所有主图（WB 商品主图一般不超过 30 张）
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 /* ---------------- 任务存储 ---------------- */

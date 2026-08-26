@@ -59,6 +59,25 @@
       || '';
   }
 
+  /** WB 图片 URL 尺寸段归一化为全尺寸 big（c516x688/tm/hq 等 → big） */
+  function toFullSize(u) {
+    try {
+      return String(u).replace(/\/images\/(?:[a-z0-9]+(?:x[a-z0-9]+)?)\//i, '/images/big/');
+    } catch { return u; }
+  }
+
+  /** 从 JSON-LD BreadcrumbList 提取源商品类目路径 */
+  function extractBreadcrumbs() {
+    const bc = deepFind(jsonLdBlocks(), (n) =>
+      n && (n['@type'] === 'BreadcrumbList' || (Array.isArray(n['@type']) && n['@type'].includes('BreadcrumbList'))));
+    const items = (bc && bc.itemListElement) || [];
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((i) => (i.item && i.item.name) || i.name || '')
+      .filter(Boolean)
+      .filter((n) => !/главная|каталог|home|catalog/i.test(n));
+  }
+
   /** 从页面HTML原文做正则兜底（__NUXT__ 等内嵌数据） */
   function nuxtProbe() {
     const html = document.documentElement.outerHTML || '';
@@ -76,7 +95,7 @@
   }
 
   function extractProduct() {
-    const p = { title: '', brand: '', description: '', price: null, currency: '', images: [], attributes: {}, sourceSku: NM_ID };
+    const p = { title: '', brand: '', description: '', price: null, currency: '', images: [], attributes: {}, sourceSku: NM_ID, crumbs: extractBreadcrumbs() };
 
     // 1) JSON-LD Product
     const ld = deepFind(jsonLdBlocks(), (n) =>
@@ -92,7 +111,7 @@
         p.currency = offer.priceCurrency || p.currency;
       }
       const imgs = ld.image;
-      if (imgs) p.images = (Array.isArray(imgs) ? imgs : [imgs]).map((i) => (typeof i === 'string' ? i : i?.url)).filter(Boolean);
+      if (imgs) p.images.push(...(Array.isArray(imgs) ? imgs : [imgs]).map((i) => (typeof i === 'string' ? i : i?.url)).filter(Boolean));
       // additionalProperty → attributes
       const props = ld.additionalProperty || [];
       (Array.isArray(props) ? props : []).forEach((prop) => {
@@ -104,9 +123,22 @@
     p.title = p.title || metaContent('og:title') || metaContent('twitter:title') || document.title.replace(/\s*[—-].*$/, '');
     p.description = p.description || metaContent('og:description') || metaContent('description');
     const ogImg = metaContent('og:image');
-    if (ogImg && !p.images.includes(ogImg)) p.images.unshift(ogImg);
+    if (ogImg) p.images.push(ogImg);
 
-    // 3) DOM 兜底
+    // 3) DOM 兜底（主图与缩略图）
+    const domImgs = [...document.querySelectorAll('.swiper-wrapper img, .product-page__main img, [itemprop="image"]')]
+      .map((img) => img.currentSrc || img.src).filter(Boolean);
+    p.images.push(...domImgs);
+
+    // 4) __NUXT__ 正则兜底
+    const nuxt = nuxtProbe();
+    p.title = p.title || nuxt.title || '';
+    p.brand = p.brand || nuxt.brand || '';
+    p.description = p.description || nuxt.description || '';
+    if (p.price == null && nuxt.price != null) p.price = nuxt.price;
+    if (nuxt.images?.length) p.images.push(...nuxt.images);
+
+    // DOM 兜底字段
     if (!p.title) p.title = (document.querySelector('h1[itemprop="name"]') || document.querySelector('h1') || {}).textContent?.trim() || '';
     if (!p.brand) {
       const brandLink = document.querySelector('a[data-link^="/brands/"]') || document.querySelector('[data-link^="/brands/"] a');
@@ -119,20 +151,9 @@
         || document.querySelector('[data-e2e="product-price"]');
       if (priceEl) p.price = Number(String(priceEl.getAttribute('content') || priceEl.textContent).replace(/[^\d.]/g, '')) || null;
     }
-    if (!p.images.length) {
-      const imgs = [...document.querySelectorAll('.swiper-wrapper img, .product-page__main img, [itemprop="image"]')];
-      p.images = imgs.map((img) => img.currentSrc || img.src).filter(Boolean);
-    }
 
-    // 4) __NUXT__ 正则兜底
-    const nuxt = nuxtProbe();
-    p.title = p.title || nuxt.title || '';
-    p.brand = p.brand || nuxt.brand || '';
-    p.description = p.description || nuxt.description || '';
-    if (p.price == null && nuxt.price != null) p.price = nuxt.price;
-    if (!p.images.length && nuxt.images?.length) p.images = nuxt.images;
-
-    p.images = [...new Set(p.images)].slice(0, 15);
+    // 全部主图：多来源合并、尺寸段归一化为 big、去重（上限 30 张）
+    p.images = [...new Set(p.images.map(toFullSize))].slice(0, 30);
     return p;
   }
 
@@ -226,16 +247,20 @@
     body.innerHTML = '';
 
     /* --- 商品信息 --- */
+    const crumbsHtml = p.crumbs && p.crumbs.length
+      ? `<div style="font-size:12px;color:#8a8aa3;grid-column:span 2">源商品类目：${esc(p.crumbs.join(' / '))}</div>`
+      : '';
     body.appendChild(el('div', { class: 'wbflow-section-title', text: '商品信息（已自动提取，可修改）' }));
+    body.appendChild(el('div', { class: 'wbflow-grid2', html: crumbsHtml }));
     body.appendChild(el('div', { class: 'wbflow-grid2' }, [
       el('label', { class: 'wbflow-label' }, [el('span', { text: '标题 *' }), el('input', { class: 'wbflow-input', id: 'wf-title', value: p.title, maxlength: '60' })]),
       el('label', { class: 'wbflow-label' }, [el('span', { text: '品牌 *' }), el('input', { class: 'wbflow-input', id: 'wf-brand', value: cfg.defaultBrand || p.brand })]),
       el('label', { class: 'wbflow-label' }, [el('span', { text: '描述' }), el('textarea', { class: 'wbflow-input', id: 'wf-desc', rows: '2' }, [document.createTextNode(p.description || '')])]),
-      el('label', { class: 'wbflow-label' }, [el('span', { text: `图片（${p.images.length}张，可编辑链接）` }), el('textarea', { class: 'wbflow-input', id: 'wf-images', rows: '3' }, [document.createTextNode(p.images.join('\n'))])]),
+      el('label', { class: 'wbflow-label' }, [el('span', { text: `主图（${p.images.length}张，可编辑链接）` }), el('textarea', { class: 'wbflow-input', id: 'wf-images', rows: '3' }, [document.createTextNode(p.images.join('\n'))])]),
     ]));
 
     /* --- 类目 --- */
-    body.appendChild(el('div', { class: 'wbflow-section-title', text: 'WB 目标类目' }));
+    body.appendChild(el('div', { class: 'wbflow-section-title', text: 'WB 目标类目（上次使用的类目会自动选中）' }));
     body.appendChild(el('div', { class: 'wbflow-grid3' }, [
       el('label', { class: 'wbflow-label' }, [
         el('span', { text: '父级类目' }),
@@ -259,12 +284,15 @@
     /* --- 定价库存 --- */
     body.appendChild(el('div', { class: 'wbflow-section-title', text: '定价与库存' }));
     body.appendChild(el('div', { class: 'wbflow-grid4' }, [
-      el('label', { class: 'wbflow-label' }, [el('span', { text: '售价（元）*' }), el('input', { class: 'wbflow-input', id: 'wf-price', type: 'number', min: '0', value: p.price ?? '' })]),
+      el('label', { class: 'wbflow-label' }, [
+        el('span', { text: `售价（元）*${p.price != null ? ` · 已带出源价 ${p.price}${p.currency || ''}` : ''}` }),
+        el('input', { class: 'wbflow-input', id: 'wf-price', type: 'number', min: '0', value: p.price ?? '' }),
+      ]),
       el('label', { class: 'wbflow-label' }, [el('span', { text: '折扣（%）' }), el('input', { class: 'wbflow-input', id: 'wf-discount', type: 'number', min: '0', max: '99', value: '0' })]),
       el('label', { class: 'wbflow-label' }, [
-        el('span', { text: '仓库' }),
+        el('span', { text: '仓库（默认我的仓库）' }),
         el('select', { class: 'wbflow-input', id: 'wf-warehouse' },
-          [el('option', { value: '', text: '选择仓库' })].concat(warehouses.map((w) => el('option', { value: w.id, text: w.name, ...(String(cfg.warehouseId) === String(w.id) ? { selected: 'selected' } : {}) })))),
+          [el('option', { value: '', text: '选择仓库' })].concat(warehouses.map((w) => el('option', { value: w.id, text: w.name })))),
       ]),
       el('label', { class: 'wbflow-label' }, [el('span', { text: '库存数量' }), el('input', { class: 'wbflow-input', id: 'wf-stock', type: 'number', min: '0', value: cfg.stock ?? 10 })]),
     ]));
@@ -279,12 +307,15 @@
     foot.appendChild(el('button', { class: 'wbflow-btn', text: '取消', onclick: closeModal }));
     foot.appendChild(btn);
 
-    // 若配置了默认类目，尝试自动选择
-    if (cfg.defaultSubjectId) {
-      // 找到其父类目并选中
-      // 简单处理：加载全部子类目搜索
-      autoSelectSubject(cfg.defaultSubjectId);
-    }
+    // 仓库默认：配置的 warehouseId > 名为"我的仓库" > 第一个仓库
+    let pickedWarehouse = warehouses.find((w) => String(w.id) === String(cfg.warehouseId || ''));
+    if (!pickedWarehouse) pickedWarehouse = warehouses.find((w) => /我的仓库|мой склад|main warehouse/i.test(w.name));
+    if (!pickedWarehouse) pickedWarehouse = warehouses[0] || null;
+    if (pickedWarehouse) document.getElementById('wf-warehouse').value = String(pickedWarehouse.id);
+
+    // 类目自动选中：记忆的 lastSubjectId 优先，其次配置的 defaultSubjectId
+    const autoSubjectId = cfg.lastSubjectId || cfg.defaultSubjectId;
+    if (autoSubjectId) autoSelectSubject(autoSubjectId);
   }
 
   function setStatus(text, cls = '') {
@@ -322,6 +353,9 @@
       const { data } = await api(base, `/api/categories/${sid}/characteristics`);
       state.charcs = data || [];
       renderChars(chars);
+      // 记忆本次类目选择，下次打开弹窗自动选中
+      const pid = document.getElementById('wf-parent').value;
+      chrome.runtime.sendMessage({ type: 'setConfig', config: { lastParentId: pid, lastSubjectId: sid } }, () => {});
     } catch (e) {
       chars.innerHTML = `<div style="grid-column:span 2;color:#d41f1c">特性加载失败：${esc(e.message)}</div>`;
     }
