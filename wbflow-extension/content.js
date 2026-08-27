@@ -108,6 +108,35 @@
     return (cat || crumbs[crumbs.length - 1] || '').trim() || null;
   }
 
+  /**
+   * 源类目路径 → WB 子类目 的精确规则表（基于面包屑关键词组合）。
+   * 例如源路径 Main / Sports / Cycling / Accessories → 自行车装饰(subjectID=1557, 体育用品)
+   * 新增规则：needs 为需要同时命中的关键词（任一 crumb 包含即命中），subjectId 为 WB 子类目ID
+   */
+  const CATEGORY_RULES = [
+    { needs: ['sport', 'cycling', 'accessor'], subjectId: 1557, note: 'Sports/Cycling/Accessories → 自行车装饰' },
+    { needs: ['sport', 'cycling'], subjectId: 2151, note: 'Sports/Cycling → 自行车' },
+    { needs: ['sport', 'accessor'], subjectId: 1557, note: 'Sports/Accessories → 自行车装饰' },
+  ];
+
+  /** 用规则表匹配源类目路径，返回 subjectId 或 null */
+  function matchCategoryRule(crumbs) {
+    const lower = (crumbs || []).map((c) => String(c).toLowerCase());
+    if (!lower.length) return null;
+    for (const rule of CATEGORY_RULES) {
+      if (rule.needs.every((k) => lower.some((c) => c.includes(k)))) return rule.subjectId;
+    }
+    return null;
+  }
+
+  /** 清洗商品标题：去掉站点后缀（如 " — купить по цене 1299 ₽"） */
+  function cleanTitle(t) {
+    return String(t || '')
+      .replace(/\s*[—–\-–]\s*(купить по цене|купить|price|buy|заказать).*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   /** 从页面HTML原文做正则兜底（__NUXT__ 等内嵌数据） */
   function nuxtProbe() {
     const html = document.documentElement.outerHTML || '';
@@ -203,9 +232,8 @@
       });
     }
 
-    // 2) meta 补充
-    p.title = p.title || metaContent('og:title') || metaContent('twitter:title') || document.title.replace(/\s*[—-].*$/, '');
-    p.description = p.description || metaContent('og:description') || metaContent('description');
+    // 2) meta 补充（描述与主图；标题交由 DOM 段按 h1 > og:title 顺序处理）
+    p.description = p.description || cleanTitle(metaContent('og:description') || metaContent('description'));
     const ogImg = metaContent('og:image');
     if (ogImg) p.images.push(ogImg);
 
@@ -235,8 +263,10 @@
       if (p.dimensions[k] != null) p.attributes[label] = String(p.dimensions[k]);
     }
 
-    // DOM 兜底字段
-    if (!p.title) p.title = (document.querySelector('h1[itemprop="name"]') || document.querySelector('h1') || {}).textContent?.trim() || '';
+    // 6) DOM 兜底：标题（h1 优先于 og:title）、品牌、价格
+    const h1 = (document.querySelector('h1[itemprop="name"]') || document.querySelector('h1') || {}).textContent?.trim() || '';
+    if (!p.title) p.title = h1;
+    if (!p.title) p.title = cleanTitle(metaContent('og:title') || metaContent('twitter:title') || document.title);
     if (!p.brand) {
       const brandLink = document.querySelector('a[data-link^="/brands/"]') || document.querySelector('[data-link^="/brands/"] a');
       p.brand = brandLink?.textContent?.trim() || '';
@@ -249,9 +279,59 @@
       if (priceEl) p.price = Number(String(priceEl.getAttribute('content') || priceEl.textContent).replace(/[^\d.]/g, '')) || null;
     }
 
+    // 7) 描述：页面描述容器兜底（Full Details 弹窗内容由 grabFullDetails 异步补充）
+    if (!p.description) {
+      const descEl = document.querySelector('[data-e2e="description"], .collapsable__content, #description, .product-page__description, [itemprop="description"]');
+      if (descEl) p.description = descEl.textContent.replace(/\s+/g, ' ').trim();
+    }
+
     // 全部主图：多来源合并、尺寸段归一化为 big、去重（上限 30 张）
     p.images = [...new Set(p.images.map(toFullSize))].slice(0, 30);
     return p;
+  }
+
+  /* ============ Full Details 弹窗描述抓取 ============ */
+
+  function findFullDetailsButton() {
+    const sels = ['[data-e2e="full-details"]', '[data-e2e="show-all-characteristics"]', '[data-e2e="details"]', '[data-e2e="more-info"]'];
+    for (const s of sels) { const el = document.querySelector(s); if (el) return el; }
+    const keywords = ['Все характеристики', 'Full details', 'Full Details', 'Подробнее', '全部详情', '所有特性'];
+    const els = [...document.querySelectorAll('button, a, div[role="button"], span, [data-e2e]')];
+    return els.find((el) => {
+      const t = (el.textContent || '').trim();
+      return t && t.length < 40 && keywords.some((k) => t === k || t.startsWith(k));
+    }) || null;
+  }
+
+  function findFullDetailsModal() {
+    const sels = ['[data-e2e="modal"]', 'div[role="dialog"]', '.modal', '.j-modal', '.modal__wrapper', '.modal-content'];
+    let best = null;
+    for (const s of sels) {
+      for (const el of document.querySelectorAll(s)) {
+        const len = (el.textContent || '').length;
+        if (len > 200 && (!best || len > (best.textContent || '').length)) best = el;
+      }
+    }
+    return best;
+  }
+
+  /** 点击商品页 "Full Details / 全部详情" 按钮，抓取弹窗中的完整描述（异步） */
+  function grabFullDetails() {
+    return new Promise((resolve) => {
+      const btn = findFullDetailsButton();
+      if (!btn) { resolve(null); return; }
+      try { btn.click(); } catch { resolve(null); return; }
+      setTimeout(() => {
+        const modal = findFullDetailsModal();
+        let text = '';
+        if (modal) {
+          text = modal.innerText || modal.textContent || '';
+          const close = modal.querySelector('[data-e2e="close"], .modal__close, [aria-label*="закрыт"], .modal-close');
+          if (close) { try { close.click(); } catch { /* ignore */ } }
+        }
+        resolve(text ? text.replace(/\s+/g, ' ').trim() : null);
+      }, 700);
+    });
   }
 
   /* ============ 弹窗UI ============ */
@@ -320,6 +400,15 @@
         state.product = extractProduct();
         // 预填价格策略
         applyPriceStrategy(state.product);
+
+        // 异步抓取商品页 "Full Details" 弹窗完整描述，成功后更新描述输入框
+        grabFullDetails().then((fullText) => {
+          if (fullText && (!state.product.description || fullText.length > state.product.description.length)) {
+            state.product.description = fullText;
+            const desc = document.getElementById('wf-desc');
+            if (desc) desc.value = fullText;
+          }
+        });
 
         const [parentsRes, warehousesRes] = await Promise.all([
           api(base, '/api/categories/parents').catch((e) => ({ data: [], error: e.message })),
@@ -444,11 +533,17 @@
 
     // 类目自动选中（与搬品保持一致）：
     // 1) 源类目学习映射 categoryMap[源类目名] 优先
-    // 2) 记忆的 lastSubjectId 兜底
-    // 3) 配置的 defaultSubjectId 最后兜底
+    // 2) 源类目路径规则表 CATEGORY_RULES（如 Sports/Cycling/Accessories → 自行车装饰）
+    // 3) 记忆的 lastSubjectId 兜底
+    // 4) 配置的 defaultSubjectId 最后兜底
     const autoSubjectId = (srcCat && catMap[srcCat] && catMap[srcCat].subjectId)
+      || matchCategoryRule(p.crumbs)
       || cfg.lastSubjectId || cfg.defaultSubjectId;
     if (autoSubjectId) autoSelectSubject(autoSubjectId);
+    else if (p.crumbs && p.crumbs.length) {
+      // 规则表未命中时提示用户参考源类目手动选择
+      setStatus(`源类目：${esc(p.crumbs.join(' / '))}，请选择对应 WB 类目（会自动记住）`);
+    }
   }
 
   function setStatus(text, cls = '') {
