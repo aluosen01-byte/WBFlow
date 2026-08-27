@@ -19,10 +19,18 @@ api.get('/version', (_req, res) => {
   res.json({ name: pkg.name, version: pkg.version });
 });
 
-/** 用户列表（不返回令牌，仅用户名） */
+/** 用户列表（不返回令牌，含令牌类型；服务令牌未配 secret 会标注） */
 api.get('/users', (_req, res) => {
   res.json({
-    users: config.userNames.map((name) => ({ name })),
+    users: config.userNames.map((name) => {
+      const u = config.users.get(name);
+      const type = (u && u.type) || 'personal';
+      return {
+        name,
+        type,
+        needSecret: type === 'service' && !(u && u.clientSecret),
+      };
+    }),
     current: currentUserName(),
   });
 });

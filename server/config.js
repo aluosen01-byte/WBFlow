@@ -19,10 +19,21 @@ function loadEnv() {
 
 const env = loadEnv();
 
+/** 解码 JWT payload（用于判断令牌类型：for=asid:* 为服务令牌） */
+function decodeJwtPayload(token) {
+  try {
+    const part = String(token || '').split('.')[1];
+    if (!part) return {};
+    const json = Buffer.from(part.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    return JSON.parse(json);
+  } catch { return {}; }
+}
+
 /**
  * 解析多用户令牌配置（.env 中 WB_USERS，JSON：{"用户名":"令牌"} 或 {"用户名":{"token":"...","clientSecret":"..."}}）。
  * 兼容单用户：未配置 WB_USERS 时，WB_TOKEN 作为默认用户"默认"。
  * clientSecret：服务令牌（for=asid:*）调用内容API需要的 X-Client-Secret。
+ * type：'service'（服务令牌，需 clientSecret）| 'personal'（个人令牌）
  */
 function loadUsers() {
   const map = new Map();
@@ -32,19 +43,25 @@ function loadUsers() {
       const parsed = JSON.parse(raw);
       for (const [name, value] of Object.entries(parsed)) {
         const n = String(name).trim();
+        let token = '';
+        let clientSecret;
         if (typeof value === 'string') {
-          if (value.trim()) map.set(n, { token: value.trim() });
+          token = value.trim();
         } else if (value && typeof value === 'object') {
-          const t = String(value.token || '').trim();
-          if (t) map.set(n, { token: t, clientSecret: String(value.clientSecret || '').trim() || undefined });
+          token = String(value.token || '').trim();
+          clientSecret = String(value.clientSecret || '').trim() || undefined;
         }
+        if (!token) continue;
+        const payload = decodeJwtPayload(token);
+        const isService = String(payload.for || '').startsWith('asid');
+        map.set(n, { token, clientSecret, type: isService ? 'service' : 'personal' });
       }
     }
   } catch (e) {
     console.error('[config] WB_USERS 解析失败（应为 JSON 对象）:', e.message);
   }
   const legacy = process.env.WB_TOKEN || env.WB_TOKEN || '';
-  if (!map.size && legacy) map.set('默认', { token: legacy });
+  if (!map.size && legacy) map.set('默认', { token: legacy, type: 'personal' });
   return map;
 }
 
@@ -78,6 +95,28 @@ export function getUserSecret(name) {
   if (!name) return '';
   const u = config.users.get(String(name));
   return (u && u.clientSecret) || '';
+}
+
+/** 按用户名取令牌类型：'service'（服务令牌）| 'personal' */
+export function getUserType(name) {
+  if (!name) return 'personal';
+  const u = config.users.get(String(name));
+  return (u && u.type) || 'personal';
+}
+
+/** 该用户是否可用：服务令牌必须有 clientSecret 才能调内容API */
+export function isUserUsable(name) {
+  const u = config.users.get(String(name));
+  if (!u) return false;
+  if (u.type === 'service' && !u.clientSecret) return false;
+  return true;
+}
+
+/** 获取服务令牌缺少 clientSecret 时的中文配置指引 */
+export function serviceSecretHint(name) {
+  return `账号「${name}」为服务令牌（for=asid:*），调用内容API需要 X-Client-Secret。`
+    + `请在 .env 的 WB_USERS 中配置：{"${name}":{"token":"...","clientSecret":"你的secret"}}，`
+    + `或切换到个人令牌账号（如 罗世凯 等）。`;
 }
 
 /** 用户是否有效 */

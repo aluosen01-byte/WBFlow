@@ -530,7 +530,8 @@
         try {
           const { users, current } = await api(base, '/api/users');
           const sel = document.getElementById('wf-user');
-          sel.innerHTML = (users || []).map((u) => `<option value="${esc(u.name)}">${esc(u.name)}</option>`).join('');
+          sel.innerHTML = (users || []).map((u) =>
+            `<option value="${esc(u.name)}">${esc(u.name)}${u.needSecret ? '（服务令牌，需配置secret）' : ''}</option>`).join('');
           const saved = cfg.currentUser || '';
           sel.value = (users || []).some((u) => u.name === saved) ? saved : (current || (users && users[0] && users[0].name) || '');
           if (sel.value) state.config.currentUser = sel.value;

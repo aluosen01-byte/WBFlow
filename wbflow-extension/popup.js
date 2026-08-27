@@ -43,7 +43,7 @@ async function loadUsers(cfg) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const { users, current } = await r.json();
     const sel = $('userSelect');
-    sel.innerHTML = (users || []).map((u) => `<option value="${u.name}">${u.name}</option>`).join('')
+    sel.innerHTML = (users || []).map((u) => `<option value="${u.name}">${u.name}${u.needSecret ? '（服务令牌，需配置secret）' : ''}</option>`).join('')
       || '<option value="">无用户</option>';
     const saved = cfg.currentUser || '';
     sel.value = (users || []).some((u) => u.name === saved) ? saved : (current || (users && users[0] && users[0].name) || '');

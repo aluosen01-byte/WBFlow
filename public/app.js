@@ -73,7 +73,7 @@ async function init() {
 function renderUserSelect() {
   const sel = $('userSelect');
   sel.innerHTML = state.users.map((x) =>
-    `<option value="${esc(x.name)}" ${x.name === state.currentUser ? 'selected' : ''}>${esc(x.name)}</option>`).join('')
+    `<option value="${esc(x.name)}" ${x.name === state.currentUser ? 'selected' : ''}>${esc(x.name)}${x.needSecret ? '（服务令牌，需配置secret）' : ''}</option>`).join('')
     || '<option value="">无用户</option>';
 }
 

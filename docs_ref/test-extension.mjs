@@ -94,8 +94,17 @@ window.chrome = {
 const json = (data, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => data });
 window.fetch = async (url, opts = {}) => {
   const path = String(url).replace(/^https?:\/\/[^/]+/, '');
-  if (path === '/api/version') return json({ name: 'wbflow', version: '1.1.1' });
-  if (path === '/api/users') return json({ users: [{ name: '罗世凯' }, { name: '罗世伟' }, { name: '罗梓晨' }, { name: '陈炜豪' }, { name: '孙红伟' }], current: '罗世凯' });
+  if (path === '/api/version') return json({ name: 'wbflow', version: '1.1.6' });
+  if (path === '/api/users') return json({
+    users: [
+      { name: '罗世凯', type: 'personal' },
+      { name: '罗世伟', type: 'service', needSecret: true },
+      { name: '罗梓晨', type: 'personal' },
+      { name: '陈炜豪', type: 'personal' },
+      { name: '孙红伟', type: 'personal' },
+    ],
+    current: '罗世凯',
+  });
   if (path === '/api/categories/parents') return json({ data: [{ id: 239, name: '体育用品' }, { id: 479, name: '电子配件' }] });
   if (path.startsWith('/api/warehouses')) return json({ data: [{ id: 999, name: '备用仓' }, { id: 2096595, name: '我的仓库' }] });
   if (path.startsWith('/api/categories?limit=500')) return json({
@@ -168,13 +177,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(userSel, '弹窗头部有用户选择器');
   assert(userSel.options.length === 5, '用户选择器列出 5 个用户: ' + userSel.options.length);
   assert(userSel.value === '罗世凯', '默认选中保存的账号「罗世凯」: ' + userSel.value);
+  const optW = [...userSel.options].find((o) => o.value === '罗世伟');
+  assert(optW && optW.textContent.includes('服务令牌'), '服务令牌用户（罗世伟）在列表中标注"服务令牌，需配置secret": ' + (optW && optW.textContent));
   // 切换用户
   userSel.value = '陈炜豪';
   userSel.dispatchEvent(new window.Event('change'));
   assert(window.document.getElementById('wf-status').textContent.includes('陈炜豪'), '切换账号后状态提示更新');
   // 版本号展示
   const verEl = window.document.getElementById('wf-version');
-  assert(verEl && verEl.textContent === 'v1.1.1', '一键搬品弹窗显示版本号 v1.1.1（来自后端 /api/version）: ' + (verEl && verEl.textContent));
+  assert(verEl && verEl.textContent === 'v1.1.6', '一键搬品弹窗显示版本号 v1.1.6（来自后端 /api/version）: ' + (verEl && verEl.textContent));
 
   console.log('== 3. 全部主图提取 + 尺寸归一化 ==');
   const images = window.document.getElementById('wf-images');

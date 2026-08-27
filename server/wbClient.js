@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { config, getUserToken, getUserSecret } from './config.js';
+import { config, getUserToken, getUserSecret, serviceSecretHint } from './config.js';
 
 /**
  * WB API 客户端：统一封装请求、鉴权、错误解析与限流退避。
@@ -89,6 +89,10 @@ async function request(base, path, { method = 'GET', body, headers = {}, retries
     if (!res.ok) {
       const title = data?.title || res.statusText;
       const detail = data?.detail || data?.errorText || (typeof data === 'string' ? data : '');
+      // 服务令牌缺少 X-Client-Secret：给出中文配置指引
+      if (/X-Client-Secret is required/i.test(detail)) {
+        throw new WbApiError(res.status, title, serviceSecretHint(currentUserName()), '', { data });
+      }
       if (attempt < retries && (res.status === 500 || res.status === 502 || res.status === 503 || res.status === 504)) {
         lastErr = new WbApiError(res.status, title, detail, { data });
         await sleep(700 * (attempt + 1));

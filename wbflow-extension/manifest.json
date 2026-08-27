@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WBFlow 一键搬品",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "在WB商品页上注入「一键搬品」按钮，一键把商品搬到自己的WB商品列表（通过本地 WBFlow 服务，支持扩展自动启动后端）",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuz+D78YNO/0FO8rfWpyMZHm+EddS6SZotfCIi05+qnj2eSv+mGULwFOYPQza3EaZXsnmMEpJ7lJbqJ5zFxtJpTwYbjYfImiFj9jPT8+C/LmUlqS9rpBeFrZ96CocpDlmFYozJyr7Zz2SLyG/XE0H30O7TIA3VvUhGU2G2Rgb/L9e6CnUWfocv6YYh8S+1nnyaM8l6snNdYoFSUSn0Ui/eELtIn/gj6yR4qgm6Ys83Kt0zcrw3JukKh/nblSW4zz1KxajRBdaKzMsP13RUuPFSgGoyvRaPpMjM3fthYYguOc+jEv3IyiRl93F2iiLQzEckMf+lgaSkA91pGc8SS0jvwIDAQAB",
   "permissions": [
