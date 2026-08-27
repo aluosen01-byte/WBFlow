@@ -407,18 +407,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(t4 && t4.value === 'Увлажнитель воздуха для дома с аромадиффузором и подсветкой',
     '标题从 [data-e2e="product-title"] 提取成功（未被站点默认 og:title 干扰）: ' + JSON.stringify(t4 && t4.value));
 
-  console.log('\n== 15. 类目路径提取（DOM 面包屑，用户反馈的加湿器页面形态） ==');
+  console.log('\n== 15. 类目路径提取（DOM 面包屑 li>a>span 嵌套，不重复） ==');
 
-  // 独立场景：无 JSON-LD BreadcrumbList，面包屑在 [data-e2e="breadcrumbs"] DOM 中
+  // 独立场景：无 JSON-LD BreadcrumbList，面包屑为 li>a>span 嵌套结构（模拟真实页面）
   const dom5 = new JSDOM('<!DOCTYPE html><html><head>'
     + '<title>Увлажнитель воздуха | WB</title>'
     + '</head><body>'
     + '<nav data-e2e="breadcrumbs">'
-    + '<a href="/catalog/bytovaya-tehnika">Бытовая техника</a>'
-    + '<a href="/catalog/klimaticheskaya-tehnika">Климатическая техника</a>'
-    + '<a href="/catalog/uvlazhniteli">Увлажнители и очистители воздуха</a>'
-    + '</nav>'
-    + '<h1 itemprop="name">Увлажнитель воздуха для дома с аромадиффузором и подсветкой</h1>'
+    + '<ol class="breadcrumbs__list">'
+    + '<li class="breadcrumbs__item"><a href="/catalog/bytovaya-tehnika"><span>Бытовая техника</span></a></li>'
+    + '<li class="breadcrumbs__item"><a href="/catalog/klimaticheskaya-tehnika"><span>Климатическая техника</span></a></li>'
+    + '<li class="breadcrumbs__item"><a href="/catalog/uvlazhniteli"><span>Увлажнители и очистители воздуха</span></a></li>'
+    + '</ol></nav>'
+    + '<div data-wba-header-name="ProductName"><h1 itemprop="name">Увлажнитель воздуха для дома с аромадиффузором и подсветкой</h1></div>'
     + '</body></html>', {
     url: 'https://www.wildberries.ru/catalog/772590607/detail.aspx',
     runScripts: 'outside-only',
@@ -432,14 +433,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
           ? { backendUrl: 'http://localhost:3000', currentUser: '罗世凯' }
           : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true }));
       },
-      getManifest: () => ({ version: '1.1.3' }),
+      getManifest: () => ({ version: '1.1.4' }),
       onMessage: { addListener() {} },
     },
   };
   const j5 = (d, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => d });
   w5.fetch = async (url) => {
     const path = String(url).replace(/^https?:\/\/[^/]+/, '');
-    if (path === '/api/version') return j5({ name: 'wbflow', version: '1.1.3' });
+    if (path === '/api/version') return j5({ name: 'wbflow', version: '1.1.4' });
     if (path === '/api/users') return j5({ users: [{ name: '罗世凯' }], current: '罗世凯' });
     if (path === '/api/categories/parents') return j5({ data: [{ id: 239, name: '体育用品' }] });
     if (path.startsWith('/api/warehouses')) return j5({ data: [{ id: 2096595, name: '我的仓库' }] });
@@ -450,9 +451,63 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await sleep(700);
   const body5 = w5.document.querySelector('.wbflow-modal-body').textContent;
   assert(body5.includes('Бытовая техника') && body5.includes('Увлажнители и очистители воздуха'),
-    'DOM 面包屑提取为类目路径（Бытовая техника / ... / Увлажнители и очистители воздуха）');
+    'DOM 面包屑提取为类目路径');
+  const crumbsSeg = body5.match(/源商品类目：([^\n]+)/);
+  assert(crumbsSeg && (crumbsSeg[1].match(/Бытовая техника/g) || []).length === 1,
+    '面包屑嵌套 li>a>span 不重复（每个类目只出现一次）: ' + (crumbsSeg && crumbsSeg[1]));
   const t5 = w5.document.getElementById('wf-title');
-  assert(t5 && t5.value === 'Увлажнитель воздуха для дома с аромадиффузором и подсветкой', '标题同时正常提取: ' + JSON.stringify(t5 && t5.value));
+  assert(t5 && t5.value === 'Увлажнитель воздуха для дома с аромадиффузором и подсветкой',
+    '标题从 data-wba-header-name="ProductName" 区块提取成功: ' + JSON.stringify(t5 && t5.value));
+
+  console.log('\n== 16. 面包屑去重 + 品牌名过滤（Yonno 混入场景） ==');
+
+  // 独立场景：面包屑 DOM 重复渲染 + 末级混入品牌 Yonno
+  const dom6 = new JSDOM('<!DOCTYPE html><html><head><title>t</title></head><body>'
+    + '<div class="breadcrumbs">'
+    + '<a href="/main">Main</a><a href="/main">Main</a><a href="/main">Main</a>'
+    + '<a href="/ha">Household Appliances</a><a href="/ha">Household Appliances</a><a href="/ha">Household Appliances</a>'
+    + '<a href="/ac">Air Conditioning</a><a href="/ac">Air Conditioning</a><a href="/ac">Air Conditioning</a>'
+    + '<a href="/hum">Humidifiers & Air Purifiers</a><a href="/hum">Humidifiers & Air Purifiers</a><a href="/hum">Humidifiers & Air Purifiers</a>'
+    + '<a href="/brands/Yonno">Yonno</a><a href="/brands/Yonno">Yonno</a><a href="/brands/Yonno">Yonno</a>'
+    + '</div>'
+    + '<h1 itemprop="name">Увлажнитель воздуха Yonno</h1>'
+    + '<a data-link="/brands/Yonno">Yonno</a>'
+    + '</body></html>', {
+    url: 'https://www.wildberries.ru/catalog/772590607/detail.aspx',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const w6 = dom6.window;
+  w6.chrome = {
+    runtime: {
+      sendMessage: (msg, cb) => {
+        if (cb) cb(msg.type === 'getConfig'
+          ? { backendUrl: 'http://localhost:3000', currentUser: '罗世凯' }
+          : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true }));
+      },
+      getManifest: () => ({ version: '1.1.4' }),
+      onMessage: { addListener() {} },
+    },
+  };
+  const j6 = (d, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => d });
+  w6.fetch = async (url) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path === '/api/version') return j6({ name: 'wbflow', version: '1.1.4' });
+    if (path === '/api/users') return j6({ users: [{ name: '罗世凯' }], current: '罗世凯' });
+    if (path === '/api/categories/parents') return j6({ data: [{ id: 239, name: '体育用品' }] });
+    if (path.startsWith('/api/warehouses')) return j6({ data: [{ id: 2096595, name: '我的仓库' }] });
+    return j6({ error: 'unhandled' }, false);
+  };
+  w6.eval(contentSrc);
+  w6.document.querySelector('.wbflow-fab').click();
+  await sleep(700);
+  const body6 = w6.document.querySelector('.wbflow-modal-body').textContent;
+  const seg6 = body6.match(/源商品类目：([^\n]+)/);
+  assert(seg6, '面包屑已展示');
+  const seg6Text = seg6[1];
+  assert((seg6Text.match(/Household Appliances/g) || []).length === 1, '重复的面包屑已去重（Household Appliances 只出现 1 次）: ' + seg6Text);
+  assert(!seg6Text.includes('Yonno'), '面包屑末级混入的品牌 Yonno 已过滤: ' + seg6Text);
+  assert((seg6Text.match(/Main/g) || []).length === 1, 'Main 去重保留 1 次');
 
   console.log('\n[全部通过] 扩展 content.js 集成测试（含失败与降级场景）');
   process.exit(0);

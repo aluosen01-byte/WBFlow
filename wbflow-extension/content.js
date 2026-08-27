@@ -89,7 +89,7 @@
         if (seg.length) crumbs = seg;
       }
     }
-    // 2) DOM 面包屑导航兜底（兼容 WB 新旧页面结构）
+    // 2) DOM 面包屑导航兜底（兼容 WB 新旧页面结构；a 优先，避免 li>a>span 重复抓取）
     if (!crumbs.length) {
       const navSels = [
         'nav[aria-label*="хлеб"]', 'nav[aria-label*="crumb"]', 'nav[aria-label*="breadcrumb"]',
@@ -98,13 +98,16 @@
         'ol[itemtype*="BreadcrumbList"]', 'ol[class*="breadcrumb"]', 'ul[class*="breadcrumb"]',
         'div[class*="breadcrumb"]',
       ];
-      for (const sel of navSels) {
-        const nav = document.querySelector(sel);
-        if (!nav) continue;
-        crumbs = [...nav.querySelectorAll('a, li, span, [itemprop="name"]')]
-          .map((a) => a.textContent.trim())
+      let nav = null;
+      for (const sel of navSels) { nav = document.querySelector(sel); if (nav) break; }
+      if (nav) {
+        let nodes = [...nav.querySelectorAll('a')];
+        if (!nodes.length) nodes = [...nav.querySelectorAll('li, span, [itemprop="name"]')];
+        crumbs = nodes
+          .map((a) => a.textContent.replace(/\s+/g, ' ').trim())
           .filter(Boolean);
-        if (crumbs.length) break;
+        // 保序去重（页面可能重复渲染面包屑 DOM）
+        crumbs = [...new Set(crumbs)];
       }
     }
     // 3) __NUXT__ 兜底：面包屑数组或父/子类目名
@@ -176,12 +179,18 @@
   function findTitleText() {
     const selectors = [
       'h1[itemprop="name"]',
+      '[data-wba-header-name="ProductName"]',
+      '[data-wba-header-name="ProductName"] h1',
       '[data-e2e="product-title"]',
+      '[data-e2e="product-name"]',
       '[data-e2e="productName"]',
       '.product-page__title h1',
       '.product-page__title',
       '.product-title',
+      '.product-name',
+      '#productTitle',
       '[itemprop="name"]',
+      '[class*="product__title"]',
       'h1',
     ];
     for (const sel of selectors) {
@@ -359,6 +368,13 @@
 
     // 全部主图：多来源合并、尺寸段归一化为 big、去重（上限 30 张）
     p.images = [...new Set(p.images.map(toFullSize))].slice(0, 30);
+    // 面包屑去重 + 去掉末级混入的品牌名（如 Yonno）
+    p.crumbs = [...new Set(p.crumbs)];
+    if (p.crumbs.length && p.brand) {
+      const last = String(p.crumbs[p.crumbs.length - 1]).toLowerCase();
+      const br = p.brand.toLowerCase();
+      if (last === br) p.crumbs.pop();
+    }
     return p;
   }
 
