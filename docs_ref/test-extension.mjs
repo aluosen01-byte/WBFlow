@@ -306,6 +306,44 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const parentOpts = w2.document.getElementById('wf-parent');
   assert(parentOpts && parentOpts.options.length === 1, '父级下拉不再静默为空（有提示引导）');
 
-  console.log('\n[全部通过] 扩展 content.js 集成测试（含失败场景）');
+  console.log('\n== 13. 站点默认标题识别（Интернет‑магазин Wildberries...） ==');
+
+  // 独立场景：页面只有站点默认标题，无商品数据
+  const dom3 = new JSDOM('<!DOCTYPE html><html><head>'
+    + '<title>Интернет‑магазин Wildberries: широкий ассортимент товаров</title>'
+    + '<meta property="og:title" content="Интернет‑магазин Wildberries: широкий ассортимент товаров">'
+    + '</head><body><h1>Wildberries</h1></body></html>', {
+    url: 'https://www.wildberries.ru/catalog/7777777/detail.aspx',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const w3 = dom3.window;
+  w3.chrome = {
+    runtime: {
+      sendMessage: (msg, cb) => {
+        if (cb) cb(msg.type === 'getConfig'
+          ? { backendUrl: 'http://localhost:3000', currentUser: '罗世凯' }
+          : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true }));
+      },
+      onMessage: { addListener() {} },
+    },
+  };
+  const j3 = (d, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => d });
+  w3.fetch = async (url) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path === '/api/users') return j3({ users: [{ name: '罗世凯' }], current: '罗世凯' });
+    if (path === '/api/categories/parents') return j3({ data: [{ id: 239, name: '体育用品' }] });
+    if (path.startsWith('/api/warehouses')) return j3({ data: [{ id: 2096595, name: '我的仓库' }] });
+    return j3({ error: 'unhandled' }, false);
+  };
+  w3.eval(contentSrc);
+  w3.document.querySelector('.wbflow-fab').click();
+  await sleep(1600); // 覆盖延迟重试(1200ms)
+  const t3 = w3.document.getElementById('wf-title');
+  assert(t3, '站点默认标题页面仍渲染弹窗');
+  assert(t3.value === '', '站点默认标题（Интернет‑магазин Wildberries...）被识别为无效，不填入商品标题: ' + JSON.stringify(t3.value));
+  assert(t3.placeholder.includes('请填写商品标题'), '标题为空时输入框提示用户手动填写: ' + JSON.stringify(t3.placeholder));
+
+  console.log('\n[全部通过] 扩展 content.js 集成测试（含失败与降级场景）');
   process.exit(0);
 })().catch((e) => { console.error('[失败]', e.message); process.exit(1); });

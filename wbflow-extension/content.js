@@ -138,6 +138,16 @@
       .trim();
   }
 
+  /** 是否为 WB 站点默认/降级标题（非真实商品标题），命中视为未提取 */
+  function isFallbackTitle(t) {
+    const s = String(t || '').trim();
+    if (!s) return true;
+    if (/Интернет[‑\-–—\s]?магазин\s+Wildberries|широкий\s+ассортимент|Онлайн[‑\-–—\s]?гипермаркет|гипермаркет\s+Wildberries/i.test(s)) return true;
+    if (/^Wildberries\s*$/i.test(s)) return true;
+    if (/^(главная|home|404|error)\b/i.test(s)) return true;
+    return false;
+  }
+
   /** 从页面HTML原文做正则兜底（__NUXT__ 等内嵌数据） */
   function nuxtProbe() {
     const html = document.documentElement.outerHTML || '';
@@ -264,10 +274,18 @@
       if (p.dimensions[k] != null) p.attributes[label] = String(p.dimensions[k]);
     }
 
-    // 6) DOM 兜底：标题（h1 优先于 og:title）、品牌、价格
-    const h1 = (document.querySelector('h1[itemprop="name"]') || document.querySelector('h1') || {}).textContent?.trim() || '';
-    if (!p.title) p.title = h1;
-    if (!p.title) p.title = cleanTitle(metaContent('og:title') || metaContent('twitter:title') || document.title);
+    // 6) DOM 兜底：标题（h1 优先于 og:title，站点默认标题视为无效）、品牌、价格
+    const h1 = (document.querySelector('h1[itemprop="name"]')
+      || document.querySelector('h1[data-e2e="product-title"]')
+      || document.querySelector('.product-page__title h1')
+      || document.querySelector('h1') || {}).textContent?.trim() || '';
+    if (!p.title && !isFallbackTitle(h1)) p.title = h1;
+    if (!p.title) {
+      const og = cleanTitle(metaContent('og:title') || metaContent('twitter:title') || document.title);
+      if (!isFallbackTitle(og)) p.title = og;
+    }
+    // 兜底链结束后仍可能是站点默认标题 → 清空视为未提取（由延迟重试/用户填写处理）
+    if (isFallbackTitle(p.title)) p.title = '';
     if (!p.brand) {
       const brandLink = document.querySelector('a[data-link^="/brands/"]') || document.querySelector('[data-link^="/brands/"] a');
       p.brand = brandLink?.textContent?.trim() || '';
@@ -418,6 +436,12 @@
           if (sel.value) state.config.currentUser = sel.value;
         } catch { /* 用户列表加载失败不影响主流程 */ }
         state.product = extractProduct();
+        // 标题为空（可能是站点默认标题/页面未渲染完）：延时重试一次，SPA 渲染延迟场景兜底
+        if (!state.product.title) {
+          await new Promise((r) => setTimeout(r, 1200));
+          const retried = extractProduct();
+          if (retried.title) state.product = retried;
+        }
         // 预填价格策略
         applyPriceStrategy(state.product);
 
@@ -473,7 +497,7 @@
     body.appendChild(el('div', { class: 'wbflow-section-title', text: '商品信息（已自动提取，可修改）' }));
     body.appendChild(el('div', { class: 'wbflow-grid2', html: crumbsHtml }));
     body.appendChild(el('div', { class: 'wbflow-grid2' }, [
-      el('label', { class: 'wbflow-label' }, [el('span', { text: '标题 *' }), el('input', { class: 'wbflow-input', id: 'wf-title', value: p.title, maxlength: '60' })]),
+      el('label', { class: 'wbflow-label' }, [el('span', { text: '标题 *' }), el('input', { class: 'wbflow-input', id: 'wf-title', value: p.title, maxlength: '60', placeholder: '请填写商品标题（自动提取失败时）' })]),
       el('label', { class: 'wbflow-label' }, [el('span', { text: '品牌（可选）' }), el('input', { class: 'wbflow-input', id: 'wf-brand', value: cfg.defaultBrand || p.brand })]),
       el('label', { class: 'wbflow-label' }, [
         el('div', { class: 'wbflow-row' }, [
