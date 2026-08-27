@@ -175,12 +175,13 @@
     return false;
   }
 
-  /** 多选择器查找商品标题元素（兼容 WB 新旧页面结构） */
+  /** 多选择器查找商品标题元素（兼容 WB 新旧页面结构，含 CSS Modules 哈希类名如 productTitle--jKvWV） */
   function findTitleText() {
     const selectors = [
       'h1[itemprop="name"]',
       '[data-wba-header-name="ProductName"]',
       '[data-wba-header-name="ProductName"] h1',
+      '[data-wba-header-name="ProductName"] h2',
       '[data-e2e="product-title"]',
       '[data-e2e="product-name"]',
       '[data-e2e="productName"]',
@@ -188,9 +189,11 @@
       '.product-page__title',
       '.product-title',
       '.product-name',
+      '[class*="productTitle"]',
+      '[class*="product-title"]',
+      '[class*="product__title"]',
       '#productTitle',
       '[itemprop="name"]',
-      '[class*="product__title"]',
       'h1',
     ];
     for (const sel of selectors) {
@@ -198,6 +201,11 @@
       if (!el) continue;
       const t = String(el.textContent || '').replace(/\s+/g, ' ').trim();
       if (t && !isFallbackTitle(t)) return t;
+    }
+    // h2 兜底：取页面第一个较长且非站点默认的 h2（WB 新模板标题为 h2.productTitle--hash）
+    for (const h2 of document.querySelectorAll('h2')) {
+      const t = String(h2.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t.length > 8 && !isFallbackTitle(t)) return t;
     }
     // meta[itemprop=name] 兜底
     const meta = document.querySelector('meta[itemprop="name"], meta[property="og:title"]');

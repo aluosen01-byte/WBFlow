@@ -509,6 +509,50 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(!seg6Text.includes('Yonno'), '面包屑末级混入的品牌 Yonno 已过滤: ' + seg6Text);
   assert((seg6Text.match(/Main/g) || []).length === 1, 'Main 去重保留 1 次');
 
+  console.log('\n== 17. 标题在 h2.productTitle--hash（用户提供的真实 DOM 结构） ==');
+
+  // 独立场景：标题为 <h2 class="...productTitle--jKvWV">，无 data-wba-header-name 容器、无 h1
+  const dom7 = new JSDOM('<!DOCTYPE html><html><head>'
+    + '<title>Интернет‑магазин Wildberries: широкий ассортимент товаров</title>'
+    + '<meta property="og:title" content="Интернет‑магазин Wildberries: широкий ассортимент товаров">'
+    + '</head><body>'
+    + '<h2 class="mo-typography mo-typography_variant_title3 mo-typography_variable-weight_title3 mo-typography_variable mo-typography_colors_primary productTitle--jKvWV">Увлажнитель воздуха для дома с аромадиффузором и подсветкой</h2>'
+    + '<div class="breadcrumbs"><a href="/ha">Household Appliances</a><a href="/hum">Humidifiers & Air Purifiers</a></div>'
+    + '</body></html>', {
+    url: 'https://www.wildberries.ru/catalog/772590607/detail.aspx',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const w7 = dom7.window;
+  w7.chrome = {
+    runtime: {
+      sendMessage: (msg, cb) => {
+        if (cb) cb(msg.type === 'getConfig'
+          ? { backendUrl: 'http://localhost:3000', currentUser: '罗世凯' }
+          : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true }));
+      },
+      getManifest: () => ({ version: '1.1.5' }),
+      onMessage: { addListener() {} },
+    },
+  };
+  const j7 = (d, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => d });
+  w7.fetch = async (url) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path === '/api/version') return j7({ name: 'wbflow', version: '1.1.5' });
+    if (path === '/api/users') return j7({ users: [{ name: '罗世凯' }], current: '罗世凯' });
+    if (path === '/api/categories/parents') return j7({ data: [{ id: 239, name: '体育用品' }] });
+    if (path.startsWith('/api/warehouses')) return j7({ data: [{ id: 2096595, name: '我的仓库' }] });
+    return j7({ error: 'unhandled' }, false);
+  };
+  w7.eval(contentSrc);
+  w7.document.querySelector('.wbflow-fab').click();
+  await sleep(700);
+  const t7 = w7.document.getElementById('wf-title');
+  assert(t7 && t7.value === 'Увлажнитель воздуха для дома с аромадиффузором и подсветкой',
+    '标题从 h2.productTitle--jKvWV 提取成功（CSS Modules 哈希类名）: ' + JSON.stringify(t7 && t7.value));
+  const body7 = w7.document.querySelector('.wbflow-modal-body').textContent;
+  assert(body7.includes('Humidifiers & Air Purifiers'), '类目路径同步提取: ' + 'ok');
+
   console.log('\n[全部通过] 扩展 content.js 集成测试（含失败与降级场景）');
   process.exit(0);
 })().catch((e) => { console.error('[失败]', e.message); process.exit(1); });
