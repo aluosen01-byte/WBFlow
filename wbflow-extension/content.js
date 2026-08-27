@@ -67,7 +67,7 @@
     } catch { return u; }
   }
 
-  /** 提取源商品类目路径：JSON-LD BreadcrumbList → DOM 面包屑导航 → __NUXT__ 类目名 */
+  /** 提取源商品类目路径：JSON-LD BreadcrumbList/category → DOM 面包屑导航 → __NUXT__ 面包屑/类目名 */
   function extractBreadcrumbs() {
     let crumbs = [];
     // 1) JSON-LD BreadcrumbList
@@ -79,22 +79,46 @@
         .map((i) => (i.item && i.item.name) || i.name || '')
         .filter(Boolean);
     }
-    // 2) DOM 面包屑导航兜底
+    // 1b) JSON-LD Product.category 字段
     if (!crumbs.length) {
-      const nav = document.querySelector('nav[aria-label*="хлеб"], nav[aria-label*="crumb"], .breadcrumbs, nav[itemprop="breadcrumb"], ol[itemtype*="BreadcrumbList"], [data-e2e="breadcrumbs"]');
-      if (nav) {
-        crumbs = [...nav.querySelectorAll('a, li, span')]
-          .map((a) => a.textContent.trim())
-          .filter(Boolean);
+      const ld = deepFind(jsonLdBlocks(), (n) =>
+        n && (n['@type'] === 'Product' || (Array.isArray(n['@type']) && n['@type'].includes('Product'))));
+      const cat = ld && ld.category;
+      if (cat) {
+        const seg = (Array.isArray(cat) ? cat : [cat]).map((c) => (typeof c === 'string' ? c : c?.name)).filter(Boolean);
+        if (seg.length) crumbs = seg;
       }
     }
-    // 3) __NUXT__ 类目名兜底
+    // 2) DOM 面包屑导航兜底（兼容 WB 新旧页面结构）
+    if (!crumbs.length) {
+      const navSels = [
+        'nav[aria-label*="хлеб"]', 'nav[aria-label*="crumb"]', 'nav[aria-label*="breadcrumb"]',
+        'nav[itemprop="breadcrumb"]', 'nav[class*="breadcrumb"]', 'nav[class*="crumb"]',
+        '.breadcrumbs', '.breadcrumbs__list', '.crumbs', '[data-e2e="breadcrumbs"]',
+        'ol[itemtype*="BreadcrumbList"]', 'ol[class*="breadcrumb"]', 'ul[class*="breadcrumb"]',
+        'div[class*="breadcrumb"]',
+      ];
+      for (const sel of navSels) {
+        const nav = document.querySelector(sel);
+        if (!nav) continue;
+        crumbs = [...nav.querySelectorAll('a, li, span, [itemprop="name"]')]
+          .map((a) => a.textContent.trim())
+          .filter(Boolean);
+        if (crumbs.length) break;
+      }
+    }
+    // 3) __NUXT__ 兜底：面包屑数组或父/子类目名
     if (!crumbs.length) {
       const nuxtCats = nuxtProbe();
-      if (nuxtCats.parentName) crumbs.push(nuxtCats.parentName);
+      if (nuxtCats.breadcrumbs && nuxtCats.breadcrumbs.length) crumbs = nuxtCats.breadcrumbs;
+      if (nuxtCats.parentName) crumbs.unshift(nuxtCats.parentName);
       if (nuxtCats.subjectName) crumbs.push(nuxtCats.subjectName);
     }
-    return crumbs.filter((n) => n && !/главная|каталог|home|catalog/i.test(n));
+    // 去掉首页/导航类目与商品名占位
+    return crumbs
+      .filter((n) => n && !/главная|каталог|home|catalog|main page/i.test(n))
+      .map((n) => n.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
   }
 
   /** 从包屑中提取"最具体的源类目名"（末级；若末级是商品名则取上一级） */
@@ -187,6 +211,12 @@
     if ((m = html.match(/"description":"([^"]{20,4000})"/))) out.description = m[1];
     if ((m = html.match(/"object_name":"([^"]+)"/)) || (m = html.match(/"subject_name":"([^"]+)"/))) out.subjectName = m[1];
     if ((m = html.match(/"parent_name":"([^"]+)"/))) out.parentName = m[1];
+    // 面包屑数组（如 "breadcrumbs":[{"name":"Бытовая техника","url":"/..."},...]）
+    if ((m = html.match(/"breadcrumbs":\[([^\]]{10,3000})\]/))) {
+      const seg = m[1];
+      const names = [...seg.matchAll(/"name":"([^"]+)"/g)].map((x) => x[1]);
+      if (names.length) out.breadcrumbs = names;
+    }
     // dimensions：兼容不同字段顺序与单位
     const dimM = html.match(/"dimensions":\s*\{([^}]{0,300})\}/);
     if (dimM) {

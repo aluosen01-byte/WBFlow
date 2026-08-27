@@ -407,6 +407,53 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(t4 && t4.value === 'Увлажнитель воздуха для дома с аромадиффузором и подсветкой',
     '标题从 [data-e2e="product-title"] 提取成功（未被站点默认 og:title 干扰）: ' + JSON.stringify(t4 && t4.value));
 
+  console.log('\n== 15. 类目路径提取（DOM 面包屑，用户反馈的加湿器页面形态） ==');
+
+  // 独立场景：无 JSON-LD BreadcrumbList，面包屑在 [data-e2e="breadcrumbs"] DOM 中
+  const dom5 = new JSDOM('<!DOCTYPE html><html><head>'
+    + '<title>Увлажнитель воздуха | WB</title>'
+    + '</head><body>'
+    + '<nav data-e2e="breadcrumbs">'
+    + '<a href="/catalog/bytovaya-tehnika">Бытовая техника</a>'
+    + '<a href="/catalog/klimaticheskaya-tehnika">Климатическая техника</a>'
+    + '<a href="/catalog/uvlazhniteli">Увлажнители и очистители воздуха</a>'
+    + '</nav>'
+    + '<h1 itemprop="name">Увлажнитель воздуха для дома с аромадиффузором и подсветкой</h1>'
+    + '</body></html>', {
+    url: 'https://www.wildberries.ru/catalog/772590607/detail.aspx',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const w5 = dom5.window;
+  w5.chrome = {
+    runtime: {
+      sendMessage: (msg, cb) => {
+        if (cb) cb(msg.type === 'getConfig'
+          ? { backendUrl: 'http://localhost:3000', currentUser: '罗世凯' }
+          : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true }));
+      },
+      getManifest: () => ({ version: '1.1.3' }),
+      onMessage: { addListener() {} },
+    },
+  };
+  const j5 = (d, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => d });
+  w5.fetch = async (url) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path === '/api/version') return j5({ name: 'wbflow', version: '1.1.3' });
+    if (path === '/api/users') return j5({ users: [{ name: '罗世凯' }], current: '罗世凯' });
+    if (path === '/api/categories/parents') return j5({ data: [{ id: 239, name: '体育用品' }] });
+    if (path.startsWith('/api/warehouses')) return j5({ data: [{ id: 2096595, name: '我的仓库' }] });
+    return j5({ error: 'unhandled' }, false);
+  };
+  w5.eval(contentSrc);
+  w5.document.querySelector('.wbflow-fab').click();
+  await sleep(700);
+  const body5 = w5.document.querySelector('.wbflow-modal-body').textContent;
+  assert(body5.includes('Бытовая техника') && body5.includes('Увлажнители и очистители воздуха'),
+    'DOM 面包屑提取为类目路径（Бытовая техника / ... / Увлажнители и очистители воздуха）');
+  const t5 = w5.document.getElementById('wf-title');
+  assert(t5 && t5.value === 'Увлажнитель воздуха для дома с аромадиффузором и подсветкой', '标题同时正常提取: ' + JSON.stringify(t5 && t5.value));
+
   console.log('\n[全部通过] 扩展 content.js 集成测试（含失败与降级场景）');
   process.exit(0);
 })().catch((e) => { console.error('[失败]', e.message); process.exit(1); });
