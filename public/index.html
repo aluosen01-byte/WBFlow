@@ -53,7 +53,10 @@
           <label>品牌（可选）<input id="mBrand" class="input" type="text" placeholder="留空则不填品牌" /></label>
           <label>价格（元）<input id="mPrice" class="input" type="number" min="0" placeholder="如 199" /></label>
           <label>图片链接（每行一个）<textarea id="mImages" class="input" rows="3" placeholder="https://…"></textarea></label>
-          <label class="span2">商品描述<textarea id="mDesc" class="input" rows="4" placeholder="商品描述"></textarea></label>
+          <label class="span2">商品描述
+            <div class="row"><textarea id="mDesc" class="input grow" rows="4" placeholder="商品描述" oninput="updateDescCount()"></textarea>
+            <span id="mDescCount" class="desc-count">0/2000</span></div>
+          </label>
         </div>
       </div>
 

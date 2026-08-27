@@ -427,7 +427,6 @@
             state.product.description = fullText;
             const desc = document.getElementById('wf-desc');
             if (desc) desc.value = fullText;
-            updateDescCount();
           }
         });
 
@@ -475,13 +474,7 @@
     body.appendChild(el('div', { class: 'wbflow-grid2' }, [
       el('label', { class: 'wbflow-label' }, [el('span', { text: '标题 *' }), el('input', { class: 'wbflow-input', id: 'wf-title', value: p.title, maxlength: '60' })]),
       el('label', { class: 'wbflow-label' }, [el('span', { text: '品牌（可选）' }), el('input', { class: 'wbflow-input', id: 'wf-brand', value: cfg.defaultBrand || p.brand })]),
-      el('label', { class: 'wbflow-label' }, [
-        el('div', { class: 'wbflow-row' }, [
-          el('span', { text: '描述（Full Details 自动抓取）' }),
-          el('span', { class: 'wf-desc-count', id: 'wf-desc-count', text: `${(p.description || '').length}/2000` }),
-        ]),
-        el('textarea', { class: 'wbflow-input', id: 'wf-desc', rows: '2', oninput: updateDescCount }, [document.createTextNode(p.description || '')]),
-      ]),
+      el('label', { class: 'wbflow-label' }, [el('span', { text: '描述' }), el('textarea', { class: 'wbflow-input', id: 'wf-desc', rows: '2' }, [document.createTextNode(p.description || '')])]),
       el('label', { class: 'wbflow-label' }, [el('span', { text: `主图（${p.images.length}张，可编辑链接）` }), el('textarea', { class: 'wbflow-input', id: 'wf-images', rows: '3' }, [document.createTextNode(p.images.join('\n'))])]),
     ]));
 
@@ -576,16 +569,6 @@
   function setStatus(text, cls = '') {
     const s = document.getElementById('wf-status');
     if (s) { s.textContent = text; s.className = 'wbflow-status ' + cls; }
-  }
-
-  /** 描述字符计数（类目限制标准 2000，超限提示；后端会按类目实际限制自动截断） */
-  function updateDescCount() {
-    const ta = document.getElementById('wf-desc');
-    const cnt = document.getElementById('wf-desc-count');
-    if (!ta || !cnt) return;
-    const len = (ta.value || '').length;
-    cnt.textContent = `${len}/2000`;
-    cnt.classList.toggle('over', len > 2000);
   }
 
   async function onParentChange() {

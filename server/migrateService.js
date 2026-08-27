@@ -135,11 +135,12 @@ async function downloadImages(urls, task, stepName) {
 }
 
 /** 构造上传卡片的载荷 */
-function buildCardPayload({ subjectID, card, characteristics, sizes }) {
+function buildCardPayload({ subjectID, card, characteristics, sizes, descLimit = 2000 }) {
   const variant = {
     vendorCode: card.vendorCode,
     title: String(card.title || '').slice(0, 60),
-    description: String(card.description || '').slice(0, 5000),
+    // 描述长度限制因类目而异（标准 2000，部分类目 1000~5000），默认按 2000 截断
+    description: String(card.description || '').slice(0, descLimit),
     kizMarked: false,
     characteristics: [],
   };
@@ -212,6 +213,7 @@ function buildCardPayload({ subjectID, card, characteristics, sizes }) {
 /** 常见俄语错误 → 中文提示 */
 const ERROR_TRANSLATIONS = [
   [/безразмерного товара|без размеров/i, '该商品类目为无尺寸商品，不能填写尺码（尺寸字段已自动省略）'],
+  [/символов\s*в\s*поле\s*Описание|описани[ея].{0,30}символ|символ.{0,30}описани/i, '商品描述超出该类目允许的最大字符数（已自动按限制截断重试）'],
   [/vendorCode/i, '商家SKU（vendorCode）问题'],
   [/характеристик/i, '缺少必填特性'],
   [/бренд|brand/i, '品牌问题（可能未在账号中注册该品牌）'],
@@ -219,6 +221,15 @@ const ERROR_TRANSLATIONS = [
   [/превышен|limit|лимит/i, '超出数量限制'],
   [/категори/i, '类目问题'],
 ];
+
+/** 从错误文本解析描述长度限制（如 "не более 2000 символов в поле Описание"） */
+export function parseDescLimit(text) {
+  if (!text) return null;
+  const m = String(text).match(/(\d{3,5})\s*(?:символов|символа|символ)/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n >= 500 ? n : null;
+}
 
 export function translateError(msg) {
   if (!msg) return msg;
@@ -365,18 +376,41 @@ export async function runMigration(input) {
       charcType: c.charcType ?? charcTypeMap.get(String(c.charcId)),
     }));
 
+    // 描述长度限制因类目而异（标准 2000，部分 1000~5000），出错时按错误提示自适应
+    let descLimit = 2000;
     const buildAndUpload = async (withSizes) => {
       const s = withSizes ? sizes : [];
-      const payload = buildCardPayload({ subjectID: input.subjectID, card, characteristics: enrichedChars, sizes: s });
+      const payload = buildCardPayload({ subjectID: input.subjectID, card, characteristics: enrichedChars, sizes: s, descLimit });
       return uploadCards([payload]);
+    };
+
+    const retryWithDescLimit = async (fromText, stepMsg) => {
+      const lim = parseDescLimit(fromText);
+      if (lim && lim < (card.description || '').length && lim >= 500) {
+        descLimit = lim;
+        endStep(task, '创建商品卡片', 'running', `${stepMsg}（该类目描述上限 ${lim} 字符，已自动截断重试）`);
+        const res = await buildAndUpload(sizes.length > 0);
+        if (res?.error) {
+          endStep(task, '创建商品卡片', 'failed', res.errorText || '重试失败');
+          throw new Error(`${res.errorText || '重试失败'}（${card.vendorCode}）`);
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+        return res;
+      }
+      return null;
     };
 
     let uploadRes = await buildAndUpload(sizes.length > 0);
     if (uploadRes?.error) {
-      const errText = uploadRes.errorText || '创建卡片失败';
-      endStep(task, '创建商品卡片', 'failed', errText);
-      const extra = uploadRes.additionalErrors ? JSON.stringify(uploadRes.additionalErrors) : '';
-      throw new Error(`${errText}${extra ? `（${extra}）` : ''}`);
+      // 描述超长：按错误提示的限制截断重试
+      const retried = await retryWithDescLimit(uploadRes.errorText || '', '描述超出类目限制');
+      if (retried) uploadRes = retried;
+      if (uploadRes?.error) {
+        const errText = uploadRes.errorText || '创建卡片失败';
+        endStep(task, '创建商品卡片', 'failed', errText);
+        const extra = uploadRes.additionalErrors ? JSON.stringify(uploadRes.additionalErrors) : '';
+        throw new Error(`${errText}${extra ? `（${extra}）` : ''}`);
+      }
     }
     endStep(task, '创建商品卡片', 'success', '卡片已提交，等待生效');
 
@@ -397,19 +431,24 @@ export async function runMigration(input) {
 
     if (cardError) {
       const zh = translateError(cardError);
-      // 无尺寸商品错误 → 自动重试一次（不带尺寸）
-      if (/безразмерного товара|без размеров/i.test(cardError)) {
-        endStep(task, '创建商品卡片', 'running', `无尺寸类目检测到，自动重试（省略尺寸）…`);
-        uploadRes = await buildAndUpload(false);
-        if (uploadRes?.error) {
-          endStep(task, '创建商品卡片', 'failed', uploadRes.errorText || '重试失败');
-          throw new Error(`${uploadRes.errorText || '重试失败'}（${card.vendorCode}）`);
+      // 描述超长 → 按限制截断重试
+      const retried = await retryWithDescLimit(cardError, '描述超出类目限制');
+      if (retried) { cardError = null; uploadRes = retried; }
+      if (cardError) {
+        // 无尺寸商品错误 → 自动重试一次（不带尺寸）
+        if (/безразмерного товара|без размеров/i.test(cardError)) {
+          endStep(task, '创建商品卡片', 'running', `无尺寸类目检测到，自动重试（省略尺寸）…`);
+          uploadRes = await buildAndUpload(false);
+          if (uploadRes?.error) {
+            endStep(task, '创建商品卡片', 'failed', uploadRes.errorText || '重试失败');
+            throw new Error(`${uploadRes.errorText || '重试失败'}（${card.vendorCode}）`);
+          }
+          await new Promise((r) => setTimeout(r, 3000));
+          cardError = null;
+        } else {
+          endStep(task, '创建商品卡片', 'failed', `${zh || cardError}`);
+          throw new Error(`${zh ? zh + '：' : ''}${cardError}`);
         }
-        await new Promise((r) => setTimeout(r, 3000));
-        cardError = null;
-      } else {
-        endStep(task, '创建商品卡片', 'failed', `${zh || cardError}`);
-        throw new Error(`${zh ? zh + '：' : ''}${cardError}`);
       }
     }
 

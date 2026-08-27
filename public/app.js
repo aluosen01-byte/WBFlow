@@ -37,6 +37,16 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/* 描述字符计数（类目标准上限 2000，后端按类目实际限制自动截断） */
+function updateDescCount() {
+  const ta = $('mDesc');
+  const cnt = $('mDescCount');
+  if (!ta || !cnt) return;
+  const len = (ta.value || '').length;
+  cnt.textContent = `${len}/2000`;
+  cnt.className = 'desc-count' + (len > 2000 ? ' over' : '');
+}
+
 /* ---------------- 初始化 ---------------- */
 async function init() {
   bindEvents();
@@ -144,6 +154,7 @@ function renderPreview(p) {
   if (p.price != null) { $('priceInput').value = p.price; $('mPrice').value = p.price; }
   if (p.title) { $('mTitle').value = p.title; }
   if (p.description) $('mDesc').value = p.description;
+  updateDescCount();
   if (p.images?.length) $('mImages').value = p.images.join('\n');
 }
 

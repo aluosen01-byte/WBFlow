@@ -216,6 +216,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(desc && desc.value.length > 100, '描述已填入 Full Details 弹窗内容: ' + (desc ? desc.value.slice(0, 40) + '…' : '空'));
   assert(desc.value.includes('Bluetooth-велокомпьютер'), '描述来自 Full Details 弹窗');
 
+  console.log('== 8.5 描述字符计数 ==');
+  const descCount = window.document.getElementById('wf-desc-count');
+  assert(descCount && /\/2000$/.test(descCount.textContent), '描述计数显示 x/2000: ' + (descCount && descCount.textContent));
+  // 超限输入 → 计数变红提示
+  const fullDesc = desc.value;
+  desc.value = 'x'.repeat(2100);
+  desc.dispatchEvent(new window.Event('input'));
+  assert(descCount.textContent === '2100/2000' && descCount.classList.contains('over'), '超 2000 字符计数标红提示（搬品时后端按类目限制自动截断）');
+  desc.value = fullDesc; // 恢复原描述供后续提交断言
+
   console.log('== 9. 品牌非必填 ==');
   const brandInput = window.document.getElementById('wf-brand');
   assert(brandInput && !brandInput.closest('label').textContent.includes('*'), '品牌标签无必填星号');

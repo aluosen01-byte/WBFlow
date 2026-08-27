@@ -94,8 +94,6 @@
 .wbflow-input:focus { border-color: #7b2bf9; box-shadow: 0 0 0 3px rgba(123, 43, 249, 0.12); }
 textarea.wbflow-input { resize: vertical; min-height: 48px; }
 .wbflow-row { display: flex; gap: 8px; align-items: center; }
-.wf-desc-count { font-size: 11px; color: #8a8aa3; font-weight: 400; margin-left: auto; }
-.wf-desc-count.over { color: #d41f1c; font-weight: 700; }
 .wbflow-btn {
   padding: 9px 18px;
   border-radius: 9px;
