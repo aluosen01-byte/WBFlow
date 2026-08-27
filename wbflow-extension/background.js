@@ -3,6 +3,7 @@
 
 const DEFAULTS = {
   backendUrl: 'http://localhost:3000',
+  currentUser: '',         // 当前操作账号（搬品使用该账号令牌），留空用后端默认用户
   warehouseId: '',
   priceMode: 'manual',     // manual | source | multiplier
   priceMultiplier: 1.5,

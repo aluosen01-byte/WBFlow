@@ -3,6 +3,7 @@
 
 const DEFAULTS = {
   backendUrl: 'http://localhost:3000',
+  currentUser: '',
   warehouseId: '',
   priceMode: 'manual',
   priceMultiplier: 1.5,
@@ -30,9 +31,26 @@ async function load() {
   if (ensure.ok) {
     setStatus('后端已就绪（' + (ensure.server === 'started' ? '本次已自动启动' : '运行中') + '）', 'ok');
   } else {
-    setStatus(ensure.hint || '后端未启动：' + (ensure.error || '') , 'err');
+    setStatus(ensure.hint || '后端未启动：' + (ensure.error || ''), 'err');
   }
-  await loadWarehouses(cfg.backendUrl);
+  await Promise.all([loadUsers(cfg), loadWarehouses(cfg.backendUrl)]);
+}
+
+async function loadUsers(cfg) {
+  const base = cfg.backendUrl;
+  try {
+    const r = await fetch(base.replace(/\/$/, '') + '/api/users');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const { users, current } = await r.json();
+    const sel = $('userSelect');
+    sel.innerHTML = (users || []).map((u) => `<option value="${u.name}">${u.name}</option>`).join('')
+      || '<option value="">无用户</option>';
+    const saved = cfg.currentUser || '';
+    sel.value = (users || []).some((u) => u.name === saved) ? saved : (current || (users && users[0] && users[0].name) || '');
+  } catch (e) {
+    $('userSelect').innerHTML = '<option value="">用户加载失败</option>';
+    setStatus('用户列表加载失败：' + e.message, 'err');
+  }
 }
 
 async function loadWarehouses(base) {
@@ -60,6 +78,7 @@ function setStatus(text, cls = '') {
 function read() {
   return {
     backendUrl: $('backendUrl').value.trim() || DEFAULTS.backendUrl,
+    currentUser: $('userSelect').value,
     warehouseId: $('warehouseId').value,
     priceMode: $('priceMode').value,
     priceMultiplier: Number($('priceMultiplier').value) || 1.5,

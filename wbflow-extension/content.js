@@ -19,10 +19,11 @@
   }
 
   async function api(base, path, opts = {}) {
-    const r = await fetch(base.replace(/\/$/, '') + path, {
-      headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
-      ...opts,
-    });
+    const headers = {};
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    // 多用户：请求携带当前操作账号（X-WB-User），后端按账号令牌鉴权
+    if (state.config && state.config.currentUser) headers['X-WB-User'] = encodeURIComponent(state.config.currentUser);
+    const r = await fetch(base.replace(/\/$/, '') + path, { ...opts, headers });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
     return j;
@@ -368,6 +369,15 @@
     if (modal) { modal.remove(); modal = null; }
   }
 
+  /** 切换操作账号：更新当前请求上下文并记忆到配置 */
+  function onUserChange() {
+    const sel = document.getElementById('wf-user');
+    if (!sel) return;
+    state.config.currentUser = sel.value;
+    chrome.runtime.sendMessage({ type: 'setConfig', config: { currentUser: sel.value } }, () => {});
+    setStatus(`已切换账号：${sel.value}，后续搬品将使用该账号`, 'ok');
+  }
+
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
   function buildModalContent(box) {
@@ -377,6 +387,7 @@
         el('span', { class: 'wf-logo', text: 'WB' }),
         el('span', { text: '一键搬品 · nmID ' + (NM_ID || '') }),
       ]),
+      el('select', { class: 'wbflow-input wf-user-select', id: 'wf-user', title: '切换操作账号', onchange: onUserChange }, [el('option', { value: '', text: '加载用户…' })]),
       el('button', { class: 'wbflow-close', text: '×', onclick: closeModal }),
     ]));
 
@@ -397,6 +408,15 @@
         const cfg = await getConfig();
         state.config = cfg;
         const base = cfg.backendUrl || 'http://localhost:3000';
+        // 加载团队用户列表并选中当前账号
+        try {
+          const { users, current } = await api(base, '/api/users');
+          const sel = document.getElementById('wf-user');
+          sel.innerHTML = (users || []).map((u) => `<option value="${esc(u.name)}">${esc(u.name)}</option>`).join('');
+          const saved = cfg.currentUser || '';
+          sel.value = (users || []).some((u) => u.name === saved) ? saved : (current || (users && users[0] && users[0].name) || '');
+          if (sel.value) state.config.currentUser = sel.value;
+        } catch { /* 用户列表加载失败不影响主流程 */ }
         state.product = extractProduct();
         // 预填价格策略
         applyPriceStrategy(state.product);

@@ -1,11 +1,37 @@
-import { config } from './config.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { config, getUserToken, getUserSecret } from './config.js';
 
 /**
  * WB API 客户端：统一封装请求、鉴权、错误解析与限流退避。
  * 网关：
  *  - 内容 API: content-api.wildberries.cn
  *  - 市场 API: marketplace-api.wildberries.cn（价格/仓库/库存）
+ *
+ * 多用户：请求处理链中通过 userStore（AsyncLocalStorage）记录当前用户名，
+ * 请求时按用户名取对应令牌（服务令牌自动附加 X-Client-Secret）；
+ * 未指定用户时使用默认用户令牌。
  */
+export const userStore = new AsyncLocalStorage();
+
+/** 在当前异步上下文内以指定用户身份执行 */
+export function withUser(name, fn) {
+  return userStore.run(name, fn);
+}
+
+/** 当前上下文中的用户名（可能为 undefined） */
+export function currentUserName() {
+  return userStore.getStore() || config.defaultUserName;
+}
+
+/** 当前上下文应使用的令牌与可选 clientSecret */
+function currentCredential() {
+  const name = userStore.getStore();
+  if (name) {
+    const t = getUserToken(name);
+    if (t) return { token: t, clientSecret: getUserSecret(name) };
+  }
+  return { token: config.wbToken, clientSecret: '' };
+}
 export class WbApiError extends Error {
   constructor(status, title, detail, extra = {}) {
     super(detail || title || `HTTP ${status}`);
@@ -22,8 +48,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function request(base, path, { method = 'GET', body, headers = {}, retries = 2 } = {}) {
   const url = path.startsWith('http') ? path : base + path;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+  const cred = currentCredential();
   const h = {
-    Authorization: config.wbToken,
+    Authorization: cred.token,
+    ...(cred.clientSecret ? { 'X-Client-Secret': cred.clientSecret } : {}),
     ...(isForm ? {} : { 'Content-Type': 'application/json' }),
     ...headers,
   };

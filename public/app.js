@@ -10,16 +10,18 @@ const state = {
   product: null,        // 解析出的源商品
   task: null,
   pollTimer: null,
+  users: [],            // 团队用户列表
+  currentUser: '',      // 当前用户（请求头 X-WB-User）
 };
 
 const ICONS = { done: '√', err: '×', skip: '-', run: '…' };
 
 /* ---------------- 通用 ---------------- */
 async function api(path, opts = {}) {
-  const r = await fetch(path, {
-    headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
-    ...opts,
-  });
+  const headers = {};
+  if (opts.body) headers['Content-Type'] = 'application/json';
+  if (state.currentUser) headers['X-WB-User'] = encodeURIComponent(state.currentUser);
+  const r = await fetch(path, { ...opts, headers });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `请求失败 HTTP ${r.status}`);
   return j;
@@ -39,22 +41,49 @@ function esc(s) {
 async function init() {
   bindEvents();
   try {
-    const s = await api('/api/status');
-    state.status = s;
-    const pill = $('statusPill');
-    if (s.ok) {
-      pill.textContent = `令牌有效 · 免费额度 ${s.limits?.freeLimits ?? '?'} · ${s.warehouses?.length ?? 0} 个仓库`;
-      pill.className = 'status-pill ok';
-    } else {
-      pill.textContent = '令牌无效：' + (s.tokenError || '');
-      pill.className = 'status-pill bad';
-    }
+    // 先加载团队用户列表
+    const u = await api('/api/users');
+    state.users = u.users || [];
+    state.currentUser = u.current || (state.users[0] && state.users[0].name) || '';
+    renderUserSelect();
+    await refreshStatus();
     await Promise.all([loadParents(), loadWarehouses()]);
   } catch (e) {
     $('statusPill').textContent = e.message;
     $('statusPill').className = 'status-pill bad';
   }
   loadTasks();
+}
+
+function renderUserSelect() {
+  const sel = $('userSelect');
+  sel.innerHTML = state.users.map((x) =>
+    `<option value="${esc(x.name)}" ${x.name === state.currentUser ? 'selected' : ''}>${esc(x.name)}</option>`).join('')
+    || '<option value="">无用户</option>';
+}
+
+async function refreshStatus() {
+  const s = await api('/api/status');
+  state.status = s;
+  const pill = $('statusPill');
+  if (s.ok) {
+    pill.textContent = `${s.user} · 额度 ${s.limits?.freeLimits ?? '?'} · ${s.warehouses?.length ?? 0} 仓库`;
+    pill.className = 'status-pill ok';
+  } else {
+    pill.textContent = `${s.user} 令牌不可用：${(s.tokenError || '').slice(0, 60)}`;
+    pill.className = 'status-pill bad';
+  }
+}
+
+async function onUserChange() {
+  state.currentUser = $('userSelect').value;
+  try {
+    await refreshStatus();
+    await Promise.all([loadParents(), loadWarehouses()]);
+  } catch (e) {
+    $('statusPill').textContent = '切换用户失败：' + e.message;
+    $('statusPill').className = 'status-pill bad';
+  }
 }
 
 function bindEvents() {
@@ -66,6 +95,7 @@ function bindEvents() {
     });
   });
 
+  $('userSelect').addEventListener('change', onUserChange);
   $('btnParse').addEventListener('click', parseSource);
   $('sourceUrl').addEventListener('keydown', (e) => { if (e.key === 'Enter') parseSource(); });
 

@@ -77,7 +77,7 @@ window.chrome = {
     sendMessage: (msg, cb) => {
       const res = msg.type === 'getConfig' ? {
         backendUrl: 'http://localhost:3000', priceMode: 'manual', priceMultiplier: 1.5,
-        stock: 5, warehouseId: '', defaultBrand: '',
+        stock: 5, warehouseId: '', defaultBrand: '', currentUser: '罗世凯',
         lastParentId: '', lastSubjectId: '',
         categoryMap: {},
       } : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true });
@@ -87,10 +87,11 @@ window.chrome = {
   },
 };
 
-// ---- 存根 fetch（模拟后端，含 体育用品/239 → 自行车装饰/1557） ----
+// ---- 存根 fetch（模拟后端，含 体育用品/239 → 自行车装饰/1557 与用户列表） ----
 const json = (data, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => data });
 window.fetch = async (url, opts = {}) => {
   const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+  if (path === '/api/users') return json({ users: [{ name: '罗世凯' }, { name: '罗世伟' }, { name: '罗梓晨' }, { name: '陈炜豪' }, { name: '孙红伟' }], current: '罗世凯' });
   if (path === '/api/categories/parents') return json({ data: [{ id: 239, name: '体育用品' }, { id: 479, name: '电子配件' }] });
   if (path.startsWith('/api/warehouses')) return json({ data: [{ id: 999, name: '备用仓' }, { id: 2096595, name: '我的仓库' }] });
   if (path.startsWith('/api/categories?limit=500')) return json({
@@ -157,6 +158,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(brand.value === 'SoundCore', '品牌来自 JSON-LD');
   const price = window.document.getElementById('wf-price');
   assert(price.value === '1999', '售价自动带出源价格: ' + price.value);
+
+  console.log('== 2.5 团队用户选择器 ==');
+  const userSel = window.document.getElementById('wf-user');
+  assert(userSel, '弹窗头部有用户选择器');
+  assert(userSel.options.length === 5, '用户选择器列出 5 个用户: ' + userSel.options.length);
+  assert(userSel.value === '罗世凯', '默认选中保存的账号「罗世凯」: ' + userSel.value);
+  // 切换用户
+  userSel.value = '陈炜豪';
+  userSel.dispatchEvent(new window.Event('change'));
+  assert(window.document.getElementById('wf-status').textContent.includes('陈炜豪'), '切换账号后状态提示更新');
 
   console.log('== 3. 全部主图提取 + 尺寸归一化 ==');
   const images = window.document.getElementById('wf-images');
@@ -225,7 +236,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(result, '品牌为空仍成功提交并渲染结果');
   assert(result.textContent.includes('1455302318'), '结果包含 nmID');
 
-  console.log('== 11. 搬品请求体完整携带 ==');
+  console.log('== 11. 搬品请求体与账号头完整携带 ==');
   assert(capturedBody, '已捕获 /api/migrate 请求体');
   assert(capturedBody.mode === 'manual', 'mode=manual');
   assert(Number(capturedBody.subjectID) === 1557, '携带子类目 subjectID=1557（自行车装饰）');
@@ -239,6 +250,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     && capturedBody.card.dimensions.width === 7 && capturedBody.card.dimensions.height === 5
     && capturedBody.card.dimensions.weightBrutto === 0.5, '携带自动提取的尺寸重量: ' + JSON.stringify(capturedBody.card.dimensions));
   assert(capturedBody.product.description.includes('Bluetooth-велокомпьютер'), '携带 Full Details 弹窗描述');
+
+  console.log('== 11.5 请求头携带操作账号 ==');
+  let capturedUserHeader = null;
+  const origFetch2 = window.fetch;
+  window.fetch = async (url, opts = {}) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path.startsWith('/api/migrate')) capturedUserHeader = (opts.headers && opts.headers['X-WB-User']) || '';
+    return origFetch2(url, opts);
+  };
+  const goBtn2 = window.document.getElementById('wf-go');
+  goBtn2.click();
+  await sleep(2600);
+  assert(capturedUserHeader === encodeURIComponent('陈炜豪'), 'migrate 请求带 X-WB-User（当前账号陈炜豪）: ' + capturedUserHeader);
 
   console.log('\n[全部通过] 扩展 content.js 集成测试');
   console.log('\n== 12. 后端接口失败时的错误提示 ==');

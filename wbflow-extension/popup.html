@@ -28,6 +28,10 @@
     <h1><span class="logo">WB</span> WBFlow 一键搬品</h1>
     <div class="sub">在 WB 商品页注入「一键搬品」按钮</div>
 
+    <label>操作账号
+      <select id="userSelect"><option value="">（加载用户…）</option></select>
+      <span class="hint">搬品使用所选账号的令牌，可随时切换</span>
+    </label>
     <label>后端服务地址
       <input id="backendUrl" type="text" placeholder="http://localhost:3000" />
       <span class="hint">打开本设置或商品页时后端将自动启动（需先运行一次 native-host\install-host.bat）</span>

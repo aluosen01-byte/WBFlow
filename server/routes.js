@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { checkToken } from './wbClient.js';
+import { config } from './config.js';
+import { checkToken, currentUserName } from './wbClient.js';
 import * as content from './contentApi.js';
 import * as market from './marketplaceApi.js';
 import { runMigration, loadTasks, getTask, fetchRecentCardErrors } from './migrateService.js';
@@ -7,8 +8,17 @@ import { fetchSourceProduct, detectSource } from './sourceFetcher.js';
 
 export const api = Router();
 
-/** 服务状态 + 令牌校验 */
+/** 用户列表（不返回令牌，仅用户名） */
+api.get('/users', (_req, res) => {
+  res.json({
+    users: config.userNames.map((name) => ({ name })),
+    current: currentUserName(),
+  });
+});
+
+/** 服务状态 + 令牌校验（按当前用户） */
 api.get('/status', async (_req, res) => {
+  const user = currentUserName();
   const token = await checkToken();
   let limits = null;
   let warehouses = [];
@@ -16,7 +26,7 @@ api.get('/status', async (_req, res) => {
     try { limits = await content.getCardsLimits(); } catch { /* ignore */ }
     try { warehouses = await market.getWarehouses(); } catch { /* ignore */ }
   }
-  res.json({ ok: token.ok, tokenError: token.error, limits, warehouses, parentCount: token.parentCount });
+  res.json({ ok: token.ok, user, tokenError: token.error, limits, warehouses, parentCount: token.parentCount });
 });
 
 /* ---------- WB 类目 / 特性 / 字典 ---------- */
