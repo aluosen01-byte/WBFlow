@@ -66,16 +66,34 @@
     } catch { return u; }
   }
 
-  /** 从 JSON-LD BreadcrumbList 提取源商品类目路径 */
+  /** 提取源商品类目路径：JSON-LD BreadcrumbList → DOM 面包屑导航 → __NUXT__ 类目名 */
   function extractBreadcrumbs() {
+    let crumbs = [];
+    // 1) JSON-LD BreadcrumbList
     const bc = deepFind(jsonLdBlocks(), (n) =>
       n && (n['@type'] === 'BreadcrumbList' || (Array.isArray(n['@type']) && n['@type'].includes('BreadcrumbList'))));
     const items = (bc && bc.itemListElement) || [];
-    if (!Array.isArray(items)) return [];
-    return items
-      .map((i) => (i.item && i.item.name) || i.name || '')
-      .filter(Boolean)
-      .filter((n) => !/главная|каталог|home|catalog/i.test(n));
+    if (Array.isArray(items)) {
+      crumbs = items
+        .map((i) => (i.item && i.item.name) || i.name || '')
+        .filter(Boolean);
+    }
+    // 2) DOM 面包屑导航兜底
+    if (!crumbs.length) {
+      const nav = document.querySelector('nav[aria-label*="хлеб"], nav[aria-label*="crumb"], .breadcrumbs, nav[itemprop="breadcrumb"], ol[itemtype*="BreadcrumbList"], [data-e2e="breadcrumbs"]');
+      if (nav) {
+        crumbs = [...nav.querySelectorAll('a, li, span')]
+          .map((a) => a.textContent.trim())
+          .filter(Boolean);
+      }
+    }
+    // 3) __NUXT__ 类目名兜底
+    if (!crumbs.length) {
+      const nuxtCats = nuxtProbe();
+      if (nuxtCats.parentName) crumbs.push(nuxtCats.parentName);
+      if (nuxtCats.subjectName) crumbs.push(nuxtCats.subjectName);
+    }
+    return crumbs.filter((n) => n && !/главная|каталог|home|catalog/i.test(n));
   }
 
   /** 从包屑中提取"最具体的源类目名"（末级；若末级是商品名则取上一级） */
@@ -100,14 +118,68 @@
     if ((m = html.match(/"salePrice":(\d+)/))) out.price = Number(m[1]);
     if ((m = html.match(/"salePriceU":(\d+)/))) out.price = Math.round(Number(m[1]) / 100);
     if ((m = html.match(/"description":"([^"]{20,4000})"/))) out.description = m[1];
+    if ((m = html.match(/"object_name":"([^"]+)"/)) || (m = html.match(/"subject_name":"([^"]+)"/))) out.subjectName = m[1];
+    if ((m = html.match(/"parent_name":"([^"]+)"/))) out.parentName = m[1];
+    // dimensions：兼容不同字段顺序与单位
+    const dimM = html.match(/"dimensions":\s*\{([^}]{0,300})\}/);
+    if (dimM) {
+      const seg = dimM[1];
+      const g = (re) => { const x = seg.match(re); return x ? Number(x[1]) : undefined; };
+      const d = {
+        length: g(/"length"\s*:\s*([\d.]+)/),
+        width: g(/"width"\s*:\s*([\d.]+)/),
+        height: g(/"height"\s*:\s*([\d.]+)/),
+        weightBrutto: g(/"weightBrutto"\s*:\s*([\d.]+)/) ?? g(/"weight"\s*:\s*([\d.]+)/),
+      };
+      if (Object.values(d).some((v) => v !== undefined)) out.dimensions = d;
+    }
     if ((m = html.match(/"photos":\[([^\]]{10,4000})\]/))) {
       out.images = (m[1].match(/"https?:[^"]+"/g) || []).map((s) => s.replace(/^"|"$/g, ''));
     }
     return out;
   }
 
+  /** 提取商品尺寸重量：__NUXT__ dimensions → JSON-LD additionalProperty → DOM 特性区块 */
+  function extractDimensions(nuxt, ld) {
+    const dims = {};
+    if (nuxt.dimensions) {
+      for (const k of ['length', 'width', 'height', 'weightBrutto']) {
+        if (nuxt.dimensions[k] != null && nuxt.dimensions[k] !== 0) dims[k] = nuxt.dimensions[k];
+      }
+    }
+    // JSON-LD additionalProperty 中的 Длина/Ширина/Высота/Вес
+    const props = (ld && ld.additionalProperty) || [];
+    (Array.isArray(props) ? props : []).forEach((prop) => {
+      const n = String(prop.name || '').toLowerCase();
+      const raw = String(prop.value ?? '').replace(/\s*[смкг]/gi, '').replace(',', '.');
+      const v = Number(raw);
+      if (!(v > 0)) return;
+      if (/длин|length/i.test(n) && dims.length == null) dims.length = v;
+      else if (/ширин|width/i.test(n) && dims.width == null) dims.width = v;
+      else if (/высот|height/i.test(n) && dims.height == null) dims.height = v;
+      else if (/вес|weight|масс/i.test(n) && dims.weightBrutto == null) dims.weightBrutto = v;
+    });
+    // DOM 特性区块兜底
+    if (!Object.keys(dims).length) {
+      const rows = document.querySelectorAll('[data-e2e="characteristics"] .product-params__row, .product-params__row, .item-prop, [itemprop="additionalProperty"]');
+      rows.forEach((row) => {
+        const nameEl = row.querySelector('.product-params__cell:first-child, .item-prop__title, [itemprop="name"]');
+        const valEl = row.querySelector('.product-params__cell:last-child, .item-prop__value, [itemprop="value"]');
+        if (!nameEl || !valEl) return;
+        const n = nameEl.textContent.toLowerCase();
+        const v = Number(String(valEl.textContent).replace(/\s*[смкг]/gi, '').replace(',', '.'));
+        if (!(v > 0)) return;
+        if (/длин|length/i.test(n) && dims.length == null) dims.length = v;
+        else if (/ширин|width/i.test(n) && dims.width == null) dims.width = v;
+        else if (/высот|height/i.test(n) && dims.height == null) dims.height = v;
+        else if (/вес|weight|масс/i.test(n) && dims.weightBrutto == null) dims.weightBrutto = v;
+      });
+    }
+    return dims;
+  }
+
   function extractProduct() {
-    const p = { title: '', brand: '', description: '', price: null, currency: '', images: [], attributes: {}, sourceSku: NM_ID, crumbs: extractBreadcrumbs() };
+    const p = { title: '', brand: '', description: '', price: null, currency: '', images: [], attributes: {}, sourceSku: NM_ID, crumbs: extractBreadcrumbs(), dimensions: {} };
 
     // 1) JSON-LD Product
     const ld = deepFind(jsonLdBlocks(), (n) =>
@@ -149,6 +221,19 @@
     p.description = p.description || nuxt.description || '';
     if (p.price == null && nuxt.price != null) p.price = nuxt.price;
     if (nuxt.images?.length) p.images.push(...nuxt.images);
+    // 类目兜底（__NUXT__ 父/子类目名）
+    if (!p.crumbs.length) {
+      if (nuxt.parentName) p.crumbs.push(nuxt.parentName);
+      if (nuxt.subjectName) p.crumbs.push(nuxt.subjectName);
+    }
+
+    // 5) 尺寸重量提取（__NUXT__ → JSON-LD → DOM 特性区块）
+    p.dimensions = extractDimensions(nuxt, ld);
+    // 尺寸重量同时写入 attributes，便于特性自动预填
+    const dimLabels = { length: '长度', width: '宽度', height: '高度', weightBrutto: '重量' };
+    for (const [k, label] of Object.entries(dimLabels)) {
+      if (p.dimensions[k] != null) p.attributes[label] = String(p.dimensions[k]);
+    }
 
     // DOM 兜底字段
     if (!p.title) p.title = (document.querySelector('h1[itemprop="name"]') || document.querySelector('h1') || {}).textContent?.trim() || '';
@@ -224,6 +309,11 @@
 
     (async () => {
       try {
+        // 打开弹窗时确保后端已启动（native host 自动拉起；失败不阻塞，由下方错误横幅提示）
+        await new Promise((resolve) => {
+          try { chrome.runtime.sendMessage({ type: 'ensureBackend' }, () => resolve()); }
+          catch { resolve(); }
+        });
         const cfg = await getConfig();
         state.config = cfg;
         const base = cfg.backendUrl || 'http://localhost:3000';
@@ -309,6 +399,16 @@
     /* --- 特性 --- */
     body.appendChild(el('div', { class: 'wbflow-section-title', text: '商品特性（选择子类目后加载；重量/尺寸类自动映射）' }));
     body.appendChild(el('div', { class: 'wbflow-chars', id: 'wf-chars' }, [el('div', { text: '请先选择子类目', style: 'grid-column:span 2;color:#8a8aa3' })]));
+
+    /* --- 尺寸与重量 --- */
+    const dims = p.dimensions || {};
+    body.appendChild(el('div', { class: 'wbflow-section-title', text: `尺寸与重量（已自动提取${Object.keys(dims).length ? '' : '，未获取到可手填'}）` }));
+    body.appendChild(el('div', { class: 'wbflow-grid4' }, [
+      el('label', { class: 'wbflow-label' }, [el('span', { text: '长（cm）' }), el('input', { class: 'wbflow-input', id: 'wf-dim-length', type: 'number', min: '0', step: '0.1', value: dims.length ?? '' })]),
+      el('label', { class: 'wbflow-label' }, [el('span', { text: '宽（cm）' }), el('input', { class: 'wbflow-input', id: 'wf-dim-width', type: 'number', min: '0', step: '0.1', value: dims.width ?? '' })]),
+      el('label', { class: 'wbflow-label' }, [el('span', { text: '高（cm）' }), el('input', { class: 'wbflow-input', id: 'wf-dim-height', type: 'number', min: '0', step: '0.1', value: dims.height ?? '' })]),
+      el('label', { class: 'wbflow-label' }, [el('span', { text: '重量（kg）' }), el('input', { class: 'wbflow-input', id: 'wf-dim-weight', type: 'number', min: '0', step: '0.01', value: dims.weightBrutto ?? '' })]),
+    ]));
 
     /* --- 定价库存 --- */
     body.appendChild(el('div', { class: 'wbflow-section-title', text: '定价与库存' }));
@@ -498,11 +598,24 @@
     if (!subjectID) missing.push('子类目');
     if (missing.length) { setStatus('请填写：' + missing.join('、'), 'err'); btn.disabled = false; return; }
 
+    // 尺寸与重量（自动提取，可修改；全空则不传）
+    const dimensions = {};
+    const dimFields = { length: 'wf-dim-length', width: 'wf-dim-width', height: 'wf-dim-height', weightBrutto: 'wf-dim-weight' };
+    for (const [k, id] of Object.entries(dimFields)) {
+      const elm = document.getElementById(id);
+      if (elm && elm.value !== '') dimensions[k] = Number(elm.value);
+    }
+
     const body = {
       mode: 'manual',
       product,
       subjectID,
-      card: { brand: product.brand, title: product.title, description: product.description },
+      card: {
+        brand: product.brand,
+        title: product.title,
+        description: product.description,
+        ...(Object.keys(dimensions).length ? { dimensions } : {}),
+      },
       characteristics: collectChars(),
       price,
       discount: Number(document.getElementById('wf-discount').value || 0),

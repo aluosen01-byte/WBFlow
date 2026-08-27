@@ -23,6 +23,15 @@ async function load() {
   $('priceMultiplier').value = cfg.priceMultiplier;
   $('stock').value = cfg.stock;
   $('defaultBrand').value = cfg.defaultBrand;
+  // 打开设置时自动确保后端已启动（native host 模式免手动 npm start）
+  const ensure = await new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'ensureBackend' }, (r) => resolve(r || { ok: false }));
+  });
+  if (ensure.ok) {
+    setStatus('后端已就绪（' + (ensure.server === 'started' ? '本次已自动启动' : '运行中') + '）', 'ok');
+  } else {
+    setStatus(ensure.hint || '后端未启动：' + (ensure.error || '') , 'err');
+  }
   await loadWarehouses(cfg.backendUrl);
 }
 

@@ -39,6 +39,13 @@ const pageHtml = `<!DOCTYPE html><html><head>
     {"@type":"ListItem","position":2,"item":{"@id":"/catalog/aksessuary","name":"Аксессуары"}},
     {"@type":"ListItem","position":3,"item":{"@id":"/catalog/1455302318","name":"Наушники"}}]}
   </script>
+  <script>
+  window.__NUXT__ = (function(){ return {
+    "object_name": "Наушники",
+    "parent_name": "Электроника",
+    "dimensions": {"length":12,"width":7,"height":5,"weightBrutto":0.5}
+  }; })();
+  </script>
 </head><body>
   <h1 itemprop="name">Беспроводные наушники TWS черные</h1>
   <a data-link="/brands/SoundCore">SoundCore</a>
@@ -65,7 +72,7 @@ window.chrome = {
         stock: 5, warehouseId: '', defaultBrand: '',
         lastParentId: '479', lastSubjectId: '2187',
         categoryMap: { 'Аксессуары': { parentId: '479', subjectId: '2187' } },
-      } : { ok: true };
+      } : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true });
       if (cb) cb(res);
     },
     onMessage: { addListener() {} },
@@ -154,12 +161,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(crumbsText.includes('Электроника') && crumbsText.includes('Аксессуары'), '源商品类目包屑已展示');
   assert(crumbsText.includes('自动匹配'), '类目标题提示"已按源类目自动匹配"');
 
-  console.log('== 5. 仓库默认"我的仓库" ==');
+  console.log('== 5. 尺寸与重量自动提取 ==');
+  const dimL = window.document.getElementById('wf-dim-length');
+  const dimW = window.document.getElementById('wf-dim-width');
+  const dimH = window.document.getElementById('wf-dim-height');
+  const dimKg = window.document.getElementById('wf-dim-weight');
+  assert(dimL && dimL.value === '12', '长=12cm（__NUXT__ dimensions）: ' + (dimL && dimL.value));
+  assert(dimW && dimW.value === '7', '宽=7cm');
+  assert(dimH && dimH.value === '5', '高=5cm');
+  assert(dimKg && dimKg.value === '0.5', '重=0.5kg');
+  const dimsTitle = window.document.querySelector('.wbflow-modal-body').textContent;
+  assert(dimsTitle.includes('尺寸与重量（已自动提取'), '尺寸区块标题显示已自动提取');
+
+  console.log('== 6. 仓库默认"我的仓库" ==');
   const warehouseSel = window.document.getElementById('wf-warehouse');
   const picked = warehouseSel.options[warehouseSel.selectedIndex];
   assert(picked && picked.value === '2096595', '仓库自动选中"我的仓库"(2096595): ' + (picked ? picked.text : '无'));
 
-  console.log('== 6. 类目与搬品保持一致（源类目映射自动选中） ==');
+  console.log('== 7. 类目与搬品保持一致（源类目映射自动选中） ==');
   await sleep(700); // 等待 autoSelectSubject 的异步级联
   const parentSel = window.document.getElementById('wf-parent');
   const subjectSel = window.document.getElementById('wf-subject');
@@ -170,12 +189,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const weightItem = [...charItems].find((i) => i.textContent.includes('带包装重量'));
   assert(weightItem && !weightItem.querySelector('input'), '重量特性自动映射（无输入框）');
 
-  console.log('== 7. 品牌非必填 ==');
+  console.log('== 8. 品牌非必填 ==');
   const brandInput = window.document.getElementById('wf-brand');
   assert(brandInput && !brandInput.closest('label').textContent.includes('*'), '品牌标签无必填星号');
   brandInput.value = ''; // 清空品牌
 
-  console.log('== 8. 提交搬品 ==');
+  console.log('== 9. 提交搬品 ==');
   let capturedBody = null;
   const origFetch = window.fetch;
   window.fetch = async (url, opts = {}) => {
@@ -190,7 +209,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(result, '品牌为空仍成功提交并渲染结果');
   assert(result.textContent.includes('1455302318'), '结果包含 nmID');
 
-  console.log('== 9. 搬品请求体完整携带 ==');
+  console.log('== 10. 搬品请求体完整携带 ==');
   assert(capturedBody, '已捕获 /api/migrate 请求体');
   assert(capturedBody.mode === 'manual', 'mode=manual');
   assert(Number(capturedBody.subjectID) === 2187, '携带子类目 subjectID=2187');
@@ -200,9 +219,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(Number(capturedBody.price) === 1299, '携带售价 1299');
   assert(Number(capturedBody.warehouseId) === 2096595, '携带默认仓库"我的仓库" 2096595');
   assert(capturedBody.useSourceImages === true, '启用源图上传');
+  assert(capturedBody.card.dimensions && capturedBody.card.dimensions.length === 12
+    && capturedBody.card.dimensions.width === 7 && capturedBody.card.dimensions.height === 5
+    && capturedBody.card.dimensions.weightBrutto === 0.5, '携带自动提取的尺寸重量: ' + JSON.stringify(capturedBody.card.dimensions));
 
   console.log('\n[全部通过] 扩展 content.js 集成测试');
-  console.log('\n== 10. 后端接口失败时的错误提示 ==');
+  console.log('\n== 11. 后端接口失败时的错误提示 ==');
 
   // 独立场景：parents 接口失败，不应静默显示空下拉
   const dom2 = new JSDOM('<!DOCTYPE html><html><head><title>t</title></head><body></body></html>', {

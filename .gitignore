@@ -7,3 +7,6 @@ data/
 # dist 下解压出来的扩展副本目录（zip 是唯一交付物）
 dist/wbflow-extension-v1.0.0/
 dist/wbflow-project-v1.0.0/
+# native host 本机生成物（install-host.bat 会重新生成）
+wbflow-extension/native-host/com.wbflow.host.json
+wbflow-extension/native-host/wbflow-host.log
