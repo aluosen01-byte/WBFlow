@@ -148,12 +148,39 @@
     return false;
   }
 
+  /** 多选择器查找商品标题元素（兼容 WB 新旧页面结构） */
+  function findTitleText() {
+    const selectors = [
+      'h1[itemprop="name"]',
+      '[data-e2e="product-title"]',
+      '[data-e2e="productName"]',
+      '.product-page__title h1',
+      '.product-page__title',
+      '.product-title',
+      '[itemprop="name"]',
+      'h1',
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      const t = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t && !isFallbackTitle(t)) return t;
+    }
+    // meta[itemprop=name] 兜底
+    const meta = document.querySelector('meta[itemprop="name"], meta[property="og:title"]');
+    if (meta) {
+      const t = cleanTitle(String(meta.content || ''));
+      if (t && !isFallbackTitle(t)) return t;
+    }
+    return '';
+  }
+
   /** 从页面HTML原文做正则兜底（__NUXT__ 等内嵌数据） */
   function nuxtProbe() {
     const html = document.documentElement.outerHTML || '';
     const out = {};
     let m;
-    if ((m = html.match(/"nm_name":"([^"]+)"/))) out.title = m[1];
+    if ((m = html.match(/"nm_name":"([^"]+)"/)) || (m = html.match(/"full_name":"([^"]+)"/))) out.title = m[1];
     if ((m = html.match(/"brand_name":"([^"]+)"/)) || (m = html.match(/"brandName":"([^"]+)"/))) out.brand = m[1];
     if ((m = html.match(/"salePrice":(\d+)/))) out.price = Number(m[1]);
     if ((m = html.match(/"salePriceU":(\d+)/))) out.price = Math.round(Number(m[1]) / 100);
@@ -225,7 +252,7 @@
     const ld = deepFind(jsonLdBlocks(), (n) =>
       n && (n['@type'] === 'Product' || (Array.isArray(n['@type']) && n['@type'].includes('Product'))));
     if (ld) {
-      p.title = ld.name || p.title;
+      p.title = ld.name || ld.headline || p.title;
       p.description = ld.description || p.description;
       p.brand = (typeof ld.brand === 'string' ? ld.brand : ld.brand?.name) || p.brand;
       const off = ld.offers;
@@ -274,12 +301,8 @@
       if (p.dimensions[k] != null) p.attributes[label] = String(p.dimensions[k]);
     }
 
-    // 6) DOM 兜底：标题（h1 优先于 og:title，站点默认标题视为无效）、品牌、价格
-    const h1 = (document.querySelector('h1[itemprop="name"]')
-      || document.querySelector('h1[data-e2e="product-title"]')
-      || document.querySelector('.product-page__title h1')
-      || document.querySelector('h1') || {}).textContent?.trim() || '';
-    if (!p.title && !isFallbackTitle(h1)) p.title = h1;
+    // 6) DOM 兜底：标题（多选择器 > og:title，站点默认标题视为无效）、品牌、价格
+    if (!p.title) p.title = findTitleText();
     if (!p.title) {
       const og = cleanTitle(metaContent('og:title') || metaContent('twitter:title') || document.title);
       if (!isFallbackTitle(og)) p.title = og;
@@ -398,6 +421,19 @@
 
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
+  /** 提取商品，标题缺失时多轮延时重试（兼容 SPA 渲染延迟 / 懒加载页面） */
+  async function extractWithRetry() {
+    let p = extractProduct();
+    if (!p.title) {
+      for (const wait of [1000, 2000]) {
+        await new Promise((r) => setTimeout(r, wait));
+        const retry = extractProduct();
+        if (retry.title) { p = retry; break; }
+      }
+    }
+    return p;
+  }
+
   function buildModalContent(box) {
     box.innerHTML = '';
     box.appendChild(el('div', { class: 'wbflow-modal-head' }, [
@@ -445,13 +481,7 @@
           sel.value = (users || []).some((u) => u.name === saved) ? saved : (current || (users && users[0] && users[0].name) || '');
           if (sel.value) state.config.currentUser = sel.value;
         } catch { /* 用户列表加载失败不影响主流程 */ }
-        state.product = extractProduct();
-        // 标题为空（可能是站点默认标题/页面未渲染完）：延时重试一次，SPA 渲染延迟场景兜底
-        if (!state.product.title) {
-          await new Promise((r) => setTimeout(r, 1200));
-          const retried = extractProduct();
-          if (retried.title) state.product = retried;
-        }
+        state.product = await extractWithRetry(); // 含多轮延时重试（SPA 渲染延迟/懒加载兜底）
         // 预填价格策略
         applyPriceStrategy(state.product);
 

@@ -359,11 +359,53 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   };
   w3.eval(contentSrc);
   w3.document.querySelector('.wbflow-fab').click();
-  await sleep(1600); // 覆盖延迟重试(1200ms)
+  await sleep(3600); // 覆盖多轮重试（首次 + 1000ms + 2000ms）
   const t3 = w3.document.getElementById('wf-title');
   assert(t3, '站点默认标题页面仍渲染弹窗');
   assert(t3.value === '', '站点默认标题（Интернет‑магазин Wildberries...）被识别为无效，不填入商品标题: ' + JSON.stringify(t3.value));
   assert(t3.placeholder.includes('请填写商品标题'), '标题为空时输入框提示用户手动填写: ' + JSON.stringify(t3.placeholder));
+
+  console.log('\n== 14. 标题在 data-e2e 元素中（无 JSON-LD / 无 h1） ==');
+
+  // 独立场景：标题在 [data-e2e="product-title"] div 中，无 JSON-LD Product
+  const dom4 = new JSDOM('<!DOCTYPE html><html><head>'
+    + '<title>Увлажнитель воздуха для дома с аромадиффузором и подсветкой | WB</title>'
+    + '<meta property="og:title" content="Интернет‑магазин Wildberries: широкий ассортимент товаров">'
+    + '</head><body>'
+    + '<div data-e2e="product-title">Увлажнитель воздуха для дома с аромадиффузором и подсветкой</div>'
+    + '<span class="price-block__price">2 399 ₽</span>'
+    + '</body></html>', {
+    url: 'https://www.wildberries.ru/catalog/772590607/detail.aspx',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const w4 = dom4.window;
+  w4.chrome = {
+    runtime: {
+      sendMessage: (msg, cb) => {
+        if (cb) cb(msg.type === 'getConfig'
+          ? { backendUrl: 'http://localhost:3000', currentUser: '罗世凯' }
+          : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true }));
+      },
+      getManifest: () => ({ version: '1.1.2' }),
+      onMessage: { addListener() {} },
+    },
+  };
+  const j4 = (d, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => d });
+  w4.fetch = async (url) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path === '/api/version') return j4({ name: 'wbflow', version: '1.1.2' });
+    if (path === '/api/users') return j4({ users: [{ name: '罗世凯' }], current: '罗世凯' });
+    if (path === '/api/categories/parents') return j4({ data: [{ id: 239, name: '体育用品' }] });
+    if (path.startsWith('/api/warehouses')) return j4({ data: [{ id: 2096595, name: '我的仓库' }] });
+    return j4({ error: 'unhandled' }, false);
+  };
+  w4.eval(contentSrc);
+  w4.document.querySelector('.wbflow-fab').click();
+  await sleep(600);
+  const t4 = w4.document.getElementById('wf-title');
+  assert(t4 && t4.value === 'Увлажнитель воздуха для дома с аромадиффузором и подсветкой',
+    '标题从 [data-e2e="product-title"] 提取成功（未被站点默认 og:title 干扰）: ' + JSON.stringify(t4 && t4.value));
 
   console.log('\n[全部通过] 扩展 content.js 集成测试（含失败与降级场景）');
   process.exit(0);
