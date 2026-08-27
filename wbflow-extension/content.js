@@ -404,6 +404,7 @@
       el('div', { class: 'wbflow-modal-title' }, [
         el('span', { class: 'wf-logo', text: 'WB' }),
         el('span', { text: '一键搬品 · nmID ' + (NM_ID || '') }),
+        el('span', { class: 'wf-version', id: 'wf-version', text: 'v…' }),
       ]),
       el('select', { class: 'wbflow-input wf-user-select', id: 'wf-user', title: '切换操作账号', onchange: onUserChange }, [el('option', { value: '', text: '加载用户…' })]),
       el('button', { class: 'wbflow-close', text: '×', onclick: closeModal }),
@@ -426,6 +427,15 @@
         const cfg = await getConfig();
         state.config = cfg;
         const base = cfg.backendUrl || 'http://localhost:3000';
+        // 版本号展示：后端 /api/version 为准，兜底扩展 manifest 版本
+        try {
+          const v = await api(base, '/api/version');
+          const verEl = document.getElementById('wf-version');
+          if (verEl && v && v.version) verEl.textContent = 'v' + v.version;
+        } catch {
+          const verEl = document.getElementById('wf-version');
+          if (verEl) { try { verEl.textContent = 'v' + (chrome.runtime.getManifest().version || ''); } catch { verEl.textContent = ''; } }
+        }
         // 加载团队用户列表并选中当前账号
         try {
           const { users, current } = await api(base, '/api/users');

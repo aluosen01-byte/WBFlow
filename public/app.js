@@ -51,6 +51,11 @@ function updateDescCount() {
 async function init() {
   bindEvents();
   try {
+    // 版本号展示
+    try {
+      const v = await api('/api/version');
+      if (v && v.version) $('appVersion').textContent = 'v' + v.version;
+    } catch { /* 版本获取失败不阻塞 */ }
     // 先加载团队用户列表
     const u = await api('/api/users');
     state.users = u.users || [];

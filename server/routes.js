@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { checkToken, currentUserName } from './wbClient.js';
 import * as content from './contentApi.js';
@@ -6,7 +9,15 @@ import * as market from './marketplaceApi.js';
 import { runMigration, loadTasks, getTask, fetchRecentCardErrors } from './migrateService.js';
 import { fetchSourceProduct, detectSource } from './sourceFetcher.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+
 export const api = Router();
+
+/** 版本号（package.json 为唯一版本源，npm run bump 递增） */
+api.get('/version', (_req, res) => {
+  res.json({ name: pkg.name, version: pkg.version });
+});
 
 /** 用户列表（不返回令牌，仅用户名） */
 api.get('/users', (_req, res) => {
