@@ -564,6 +564,69 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const body7 = w7.document.querySelector('.wbflow-modal-body').textContent;
   assert(body7.includes('Humidifiers & Air Purifiers'), '类目路径同步提取: ' + 'ok');
 
+  console.log('\n== 18. SPA 导航：列表页进入商品页自动出现按钮，切换商品 nmID 更新 ==');
+
+  // 独立场景：初始为非商品页（无按钮）→ pushState 导航到商品页 → 按钮出现 → 切换商品 nmID 更新
+  const dom8 = new JSDOM('<!DOCTYPE html><html><head><title>list</title></head><body>'
+    + '<div class="catalog"></div>'
+    + '<h1 itemprop="name">Товар A</h1>'
+    + '</body></html>', {
+    url: 'https://www.wildberries.ru/catalog/',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const w8 = dom8.window;
+  w8.chrome = {
+    runtime: {
+      sendMessage: (msg, cb) => {
+        if (cb) cb(msg.type === 'getConfig'
+          ? { backendUrl: 'http://localhost:3000', currentUser: '罗世凯' }
+          : (msg.type === 'ensureBackend' ? { ok: true, server: 'running' } : { ok: true }));
+      },
+      getManifest: () => ({ version: '1.1.7' }),
+      onMessage: { addListener() {} },
+    },
+  };
+  const j8 = (d, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => d });
+  w8.fetch = async (url) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path === '/api/version') return j8({ name: 'wbflow', version: '1.1.7' });
+    if (path === '/api/users') return j8({ users: [{ name: '罗世凯' }], current: '罗世凯' });
+    if (path === '/api/categories/parents') return j8({ data: [{ id: 239, name: '体育用品' }] });
+    if (path.startsWith('/api/warehouses')) return j8({ data: [{ id: 2096595, name: '我的仓库' }] });
+    return j8({ error: 'unhandled' }, false);
+  };
+  w8.eval(contentSrc);
+
+  // 1) 列表页：无按钮
+  assert(!w8.document.querySelector('.wbflow-fab'), '列表页（非商品页）不显示按钮');
+
+  // 2) SPA 导航到商品页 743458164
+  w8.history.pushState({}, '', '/catalog/743458164/detail.aspx');
+  await sleep(1300); // 等轮询检测 URL 变化
+  const fab8 = w8.document.querySelector('.wbflow-fab');
+  assert(fab8, 'SPA 导航到商品页后自动出现"一键搬品"按钮');
+  fab8.click();
+  await sleep(500);
+  const modalTitle8 = w8.document.querySelector('.wbflow-modal-title').textContent;
+  assert(modalTitle8.includes('743458164'), '弹窗显示当前商品 nmID 743458164: ' + modalTitle8);
+
+  // 3) SPA 导航到另一商品 → 弹窗关闭，按钮仍在；重新打开显示新 nmID
+  w8.document.querySelector('.wbflow-close').click();
+  w8.history.pushState({}, '', '/catalog/772590607/detail.aspx');
+  await sleep(1300);
+  assert(w8.document.querySelector('.wbflow-fab'), '切换商品后按钮仍在');
+  w8.document.querySelector('.wbflow-fab').click();
+  await sleep(500);
+  const modalTitle8b = w8.document.querySelector('.wbflow-modal-title').textContent;
+  assert(modalTitle8b.includes('772590607'), '切换商品后弹窗显示新 nmID 772590607: ' + modalTitle8b);
+
+  // 4) 导航回非商品页 → 按钮移除
+  w8.document.querySelector('.wbflow-close').click();
+  w8.history.pushState({}, '', '/');
+  await sleep(1300);
+  assert(!w8.document.querySelector('.wbflow-fab'), '离开商品页后按钮移除');
+
   console.log('\n[全部通过] 扩展 content.js 集成测试（含失败与降级场景）');
   process.exit(0);
 })().catch((e) => { console.error('[失败]', e.message); process.exit(1); });

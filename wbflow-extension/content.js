@@ -5,9 +5,11 @@
   if (window.__WBF_LOADED__) return;
   window.__WBF_LOADED__ = true;
 
-  const NM_MATCH = window.location.pathname.match(/\/catalog\/(\d+)\/detail\.aspx/i);
-  if (!NM_MATCH) return; // 非商品详情页不注入
-  const NM_ID = NM_MATCH[1];
+  /** 从当前 URL 提取商品 nmID（SPA 导航后动态获取） */
+  function currentNmId() {
+    const m = window.location.pathname.match(/\/catalog\/(\d+)\/detail\.aspx/i);
+    return m ? m[1] : null;
+  }
 
   const ICONS = { done: '√', err: '×', skip: '-', run: '…' };
 
@@ -293,7 +295,7 @@
   }
 
   function extractProduct() {
-    const p = { title: '', brand: '', description: '', price: null, currency: '', images: [], attributes: {}, sourceSku: NM_ID, crumbs: extractBreadcrumbs(), dimensions: {} };
+    const p = { title: '', brand: '', description: '', price: null, currency: '', images: [], attributes: {}, sourceSku: currentNmId(), crumbs: extractBreadcrumbs(), dimensions: {} };
 
     // 1) JSON-LD Product
     const ld = deepFind(jsonLdBlocks(), (n) =>
@@ -450,6 +452,7 @@
 
   function openModal() {
     if (modal) return;
+    if (!currentNmId()) return; // 非商品详情页不打开
     modal = el('div', { class: 'wbflow-modal-mask' });
     const box = el('div', { class: 'wbflow-modal' });
     modal.appendChild(box);
@@ -493,7 +496,7 @@
     box.appendChild(el('div', { class: 'wbflow-modal-head' }, [
       el('div', { class: 'wbflow-modal-title' }, [
         el('span', { class: 'wf-logo', text: 'WB' }),
-        el('span', { text: '一键搬品 · nmID ' + (NM_ID || '') }),
+        el('span', { text: '一键搬品 · nmID ' + (currentNmId() || '') }),
         el('span', { class: 'wf-version', id: 'wf-version', text: 'v…' }),
       ]),
       el('select', { class: 'wbflow-input wf-user-select', id: 'wf-user', title: '切换操作账号', onchange: onUserChange }, [el('option', { value: '', text: '加载用户…' })]),
@@ -837,7 +840,7 @@
       description: document.getElementById('wf-desc').value.trim(),
       price: document.getElementById('wf-price').value ? Number(document.getElementById('wf-price').value) : null,
       images: document.getElementById('wf-images').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
-      sourceSku: NM_ID,
+      sourceSku: currentNmId(),
     };
     const subjectID = Number(document.getElementById('wf-subject').value);
     const price = document.getElementById('wf-price').value ? Number(document.getElementById('wf-price').value) : product.price;
@@ -944,11 +947,33 @@
     } catch { /* ignore */ }
   }
 
-  /* ============ 悬浮按钮 ============ */
-  function injectFab() {
-    const fab = el('button', { class: 'wbflow-fab', text: '一键搬品', onclick: openModal });
-    document.body.appendChild(fab);
+  /* ============ 悬浮按钮（动态管理，支持 SPA 导航） ============ */
+  let fab = null;
+  function ensureFab() {
+    const isProduct = Boolean(currentNmId());
+    if (isProduct && !fab) {
+      fab = el('button', { class: 'wbflow-fab', text: '一键搬品', onclick: openModal });
+      document.body.appendChild(fab);
+    } else if (!isProduct && fab) {
+      fab.remove();
+      fab = null;
+    }
   }
 
-  injectFab();
+  // 初始注入
+  ensureFab();
+
+  // SPA 站内导航监听（WB 列表页→商品页不刷新页面）：URL 变化时重新评估按钮
+  let lastUrl = location.href;
+  const onUrlChange = () => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      ensureFab();
+      // 弹窗中商品已切换：关闭弹窗，避免旧商品数据
+      if (modal) closeModal();
+    }
+  };
+  window.addEventListener('popstate', onUrlChange);
+  window.addEventListener('hashchange', onUrlChange);
+  setInterval(onUrlChange, 1000);
 })();
