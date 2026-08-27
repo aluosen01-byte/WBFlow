@@ -71,6 +71,11 @@
   font-weight: 600;
   margin-left: 2px;
 }
+/* 必填醒目：售价 */
+.req-flag { color: #d41f1c; font-weight: 800; }
+.wf-hint { color: #8a8aa3; font-size: 11px; font-weight: 400; }
+.wf-price-input { border-color: #cb11ab !important; }
+.wf-price-input.error { border-color: #d41f1c !important; box-shadow: 0 0 0 3px rgba(212, 31, 28, 0.15); }
 .wbflow-close {
   border: none; background: #f1f1f8; color: #666;
   width: 28px; height: 28px; border-radius: 50%;

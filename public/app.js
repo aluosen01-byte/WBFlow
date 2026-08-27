@@ -340,7 +340,13 @@ async function runMigrate() {
 
   if (!body.subjectID) { setStatus('migrateStatus', '请选择子类目', 'err'); btn.disabled = false; return; }
   if (mode === 'url' && !state.product) { setStatus('migrateStatus', '请先解析源商品，或切换到手动输入', 'err'); btn.disabled = false; return; }
-  if (!body.price) { setStatus('migrateStatus', '请填写售价', 'err'); btn.disabled = false; return; }
+  if (!body.price || !(body.price > 0)) {
+    const priceInput = $('priceInput');
+    if (priceInput) priceInput.classList.add('error');
+    setStatus('migrateStatus', '售价为必填项，请填写售价（元）', 'err');
+    btn.disabled = false;
+    return;
+  }
 
   try {
     const { taskId } = await api('/api/migrate', { method: 'POST', body: JSON.stringify(body) });

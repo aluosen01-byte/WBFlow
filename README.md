@@ -12,12 +12,13 @@
 - **搬品历史**：任务持久化，可回看每一步结果与失败原因（俄语错误自动翻译为中文提示）
 - **令牌安全**：令牌存放于 `.env`（已 gitignore），服务端统一鉴权
 
-## 版本号
+## 版本号与发布
 
-- 版本号以 `package.json` 为唯一版本源，格式 `x.y.z`，**每次代码修改后运行 `npm run bump`，版本号自动 +1**（同步更新扩展 `manifest.json` 的 version）
-- 版本号展示位置：
-  - 网页顶部标题旁（`v1.1.1`）
-  - 扩展"一键搬品"弹窗标题旁（`v1.1.1`，来自后端 `/api/version`，后端不可达时回退扩展 manifest 版本）
+- 版本号以 `package.json` 为唯一版本源，格式 `x.y.z`
+- **`npm run bump`**：每次代码修改后运行，版本号自动 +1（同步扩展 `manifest.json`）
+- **`npm run package`**：打包 `dist/wbflow-extension-v1.0.0.zip` 与全项目 zip，并**自动解压覆盖 `dist/wbflow-extension/`**（Chrome 加载扩展所用的目录，免手动解压）
+- **`npm run release`** = `npm run bump` + `npm run package`（一次完成版本递增与发布打包）
+- 版本号展示：网页顶部与扩展"一键搬品"弹窗（`v1.1.2`，来自 `/api/version`）
 - 后端提供 `GET /api/version` 返回 `{ name, version }`
 
 ## 快速开始

@@ -564,8 +564,8 @@
     body.appendChild(el('div', { class: 'wbflow-section-title', text: '定价与库存' }));
     body.appendChild(el('div', { class: 'wbflow-grid4' }, [
       el('label', { class: 'wbflow-label' }, [
-        el('span', { text: `售价（元）*${p.price != null ? ` · 已带出源价 ${p.price}${p.currency || ''}` : ''}` }),
-        el('input', { class: 'wbflow-input', id: 'wf-price', type: 'number', min: '0', value: p.price ?? '' }),
+        el('span', { html: `<span class="req-flag">售价（元）*</span>${p.price != null ? ` <span class="wf-hint">已带出源价 ${p.price}${p.currency || ''}</span>` : ''}` }),
+        el('input', { class: 'wbflow-input wf-price-input', id: 'wf-price', type: 'number', min: '0', value: p.price ?? '', placeholder: '必填，如 199' }),
       ]),
       el('label', { class: 'wbflow-label' }, [el('span', { text: '折扣（%）' }), el('input', { class: 'wbflow-input', id: 'wf-discount', type: 'number', min: '0', max: '99', value: '0' })]),
       el('label', { class: 'wbflow-label' }, [
@@ -762,7 +762,20 @@
     const missing = [];
     if (!product.title) missing.push('标题');
     if (!subjectID) missing.push('子类目');
+    // 售价必填（明显提示）
+    if (price == null || !(price > 0)) {
+      const priceInput = document.getElementById('wf-price');
+      if (priceInput) priceInput.classList.add('error');
+      setStatus('售价为必填项，请填写售价（元）', 'err');
+      btn.disabled = false;
+      return;
+    }
     if (missing.length) { setStatus('请填写：' + missing.join('、'), 'err'); btn.disabled = false; return; }
+
+    // 记忆本次搬品使用的账号：下次搬品默认使用同一用户
+    if (state.config.currentUser) {
+      chrome.runtime.sendMessage({ type: 'setConfig', config: { currentUser: state.config.currentUser } }, () => {});
+    }
 
     // 尺寸与重量（自动提取，可修改；全空则不传）
     const dimensions = {};

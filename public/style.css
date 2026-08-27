@@ -154,6 +154,10 @@ textarea.input { resize: vertical; }
 .inline-status.ok { color: var(--ok); }
 .desc-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .desc-count.over { color: var(--err); font-weight: 700; }
+/* 必填醒目：售价 */
+.req-flag { color: var(--err); font-weight: 800; }
+.price-input { border-color: var(--wb-pink) !important; }
+.price-input.error { border-color: var(--err) !important; box-shadow: 0 0 0 3px rgba(212, 31, 28, 0.15); }
 
 .hidden { display: none !important; }
 

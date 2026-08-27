@@ -72,9 +72,11 @@ const dom = new JSDOM(pageHtml, {
 const { window } = dom;
 
 // ---- 存根 chrome.runtime：无学习映射（验证规则表 Sports/Cycling/Accessories → 自行车装饰） ----
+const savedSetConfig = [];
 window.chrome = {
   runtime: {
     sendMessage: (msg, cb) => {
+      if (msg.type === 'setConfig') savedSetConfig.push(msg.config);
       const res = msg.type === 'getConfig' ? {
         backendUrl: 'http://localhost:3000', priceMode: 'manual', priceMultiplier: 1.5,
         stock: 5, warehouseId: '', defaultBrand: '', currentUser: '罗世凯',
@@ -236,6 +238,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(brandInput && !brandInput.closest('label').textContent.includes('*'), '品牌标签无必填星号');
   brandInput.value = ''; // 清空品牌
 
+  console.log('== 9.5 售价必填校验 ==');
+  const priceInput = window.document.getElementById('wf-price');
+  const origPrice = priceInput.value;
+  priceInput.value = '';
+  const goBtnPre = window.document.getElementById('wf-go');
+  goBtnPre.click();
+  await sleep(300);
+  const statusPre = window.document.getElementById('wf-status');
+  assert(statusPre.textContent.includes('售价为必填项'), '售价为空时提示必填: ' + statusPre.textContent);
+  assert(priceInput.classList.contains('error'), '售价输入框标红提示');
+  priceInput.value = origPrice; // 恢复售价
+
   console.log('== 10. 提交搬品 ==');
   let capturedBody = null;
   const origFetch = window.fetch;
@@ -250,6 +264,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const result = window.document.querySelector('.wbflow-result');
   assert(result, '品牌为空仍成功提交并渲染结果');
   assert(result.textContent.includes('1455302318'), '结果包含 nmID');
+  const savedUser = savedSetConfig.filter((c) => c.currentUser).pop();
+  assert(savedUser && savedUser.currentUser === '陈炜豪', '搬品提交时记忆当前账号（陈炜豪），下次搬品默认使用: ' + JSON.stringify(savedUser));
 
   console.log('== 11. 搬品请求体与账号头完整携带 ==');
   assert(capturedBody, '已捕获 /api/migrate 请求体');
