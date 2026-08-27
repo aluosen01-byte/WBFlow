@@ -202,5 +202,37 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(capturedBody.useSourceImages === true, '启用源图上传');
 
   console.log('\n[全部通过] 扩展 content.js 集成测试');
+  console.log('\n== 10. 后端接口失败时的错误提示 ==');
+
+  // 独立场景：parents 接口失败，不应静默显示空下拉
+  const dom2 = new JSDOM('<!DOCTYPE html><html><head><title>t</title></head><body></body></html>', {
+    url: 'https://www.wildberries.ru/catalog/999999/detail.aspx',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const w2 = dom2.window;
+  w2.chrome = {
+    runtime: {
+      sendMessage: (msg, cb) => { if (cb) cb(msg.type === 'getConfig' ? { backendUrl: 'http://localhost:3000' } : { ok: true }); },
+      onMessage: { addListener() {} },
+    },
+  };
+  const failJson = (ok = false) => ({ ok, status: ok ? 200 : 500, json: async () => ({ error: 'boom' }) });
+  w2.fetch = async (url) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path === '/api/categories/parents') return failJson(false);
+    if (path.startsWith('/api/warehouses')) return failJson(true);
+    return failJson(false);
+  };
+  w2.eval(contentSrc);
+  w2.document.querySelector('.wbflow-fab').click();
+  await sleep(600);
+  const errBox = w2.document.querySelector('.wbflow-error');
+  assert(errBox, '接口失败时显示错误横幅');
+  assert(errBox.textContent.includes('后端数据加载失败') && errBox.textContent.includes('npm start'), '错误提示包含"后端数据加载失败"与启动指引');
+  const parentOpts = w2.document.getElementById('wf-parent');
+  assert(parentOpts && parentOpts.options.length === 1, '父级下拉不再静默为空（有提示引导）');
+
+  console.log('\n[全部通过] 扩展 content.js 集成测试（含失败场景）');
   process.exit(0);
 })().catch((e) => { console.error('[失败]', e.message); process.exit(1); });

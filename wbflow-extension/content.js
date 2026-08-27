@@ -231,12 +231,13 @@
         // 预填价格策略
         applyPriceStrategy(state.product);
 
-        const [parents, warehouses] = await Promise.all([
-          api(base, '/api/categories/parents').catch(() => ({ data: [] })),
-          api(base, '/api/warehouses').catch(() => ({ data: [] })),
+        const [parentsRes, warehousesRes] = await Promise.all([
+          api(base, '/api/categories/parents').catch((e) => ({ data: [], error: e.message })),
+          api(base, '/api/warehouses').catch((e) => ({ data: [], error: e.message })),
         ]);
-        state.parents = parents.data || [];
-        renderForm(body, foot, warehouses.data || [], cfg);
+        state.parents = parentsRes.data || [];
+        const loadErrors = [parentsRes.error, warehousesRes.error].filter(Boolean);
+        renderForm(body, foot, warehousesRes.data || [], cfg, loadErrors);
       } catch (e) {
         body.innerHTML = `<div class="wbflow-error">无法连接 WBFlow 后端：${esc(e.message)}<br/>请确认已在本地运行 <b>npm start</b>（默认 http://localhost:3000），并在扩展设置中确认后端地址。</div>`;
       }
@@ -252,11 +253,18 @@
     // manual 模式也预填源价格，便于用户修改
   }
 
-  function renderForm(body, foot, warehouses, cfg) {
+  function renderForm(body, foot, warehouses, cfg, loadErrors = []) {
     const p = state.product;
     const base = cfg.backendUrl || 'http://localhost:3000';
 
     body.innerHTML = '';
+
+    // 加载失败提示（后端未启动 / 接口异常时明确告知，避免"无法选择"但无提示）
+    if (loadErrors.length) {
+      body.appendChild(el('div', { class: 'wbflow-error', html:
+        `后端数据加载失败：${esc(loadErrors.join('；'))}<br/>` +
+        `请确认已在本地运行 <b>npm start</b>（后端地址：${esc(base)}），然后关闭本窗口重新打开。</b>` }));
+    }
 
     /* --- 商品信息 --- */
     const crumbsHtml = p.crumbs && p.crumbs.length
